@@ -5,6 +5,11 @@ import com.z.imab.importer.ImportAction
 import com.z.imab.importer.ImportMatcher
 import com.z.imab.importer.ImportRow
 import com.z.imab.importer.ImportWindow
+import com.z.imab.budget.LoanMath
+import com.z.imab.model.LoanSplit
+import com.z.imab.model.Money
+import com.z.imab.model.PayeeRule
+import kotlinx.datetime.toLocalDateTime
 import com.z.imab.model.Account
 import com.z.imab.model.Assignment
 import com.z.imab.model.BudgetData
@@ -81,8 +86,21 @@ class Budget(
 
         fun putScheduled(s: ScheduledTransaction) = put(Kinds.SCHEDULED, s.id, s, ScheduledTransaction.serializer())
 
-        /** Saves a transaction, keeping the other leg of a transfer in step. */
+        /** Saves a transaction, keeping the other leg of a transfer and any loan principal entry in step. */
         fun saveTxn(input: Transaction) {
+            val before = d.transactions[input.id]
+            val wasLoan = before?.loanSplit?.loanAccountId
+            val from = minOf(input.date, before?.date ?: input.date)
+            saveTxnAndTransfer(input)
+            val loan = input.loanSplit?.loanAccountId
+            if (loan != null) recalcLoan(loan, from)
+            if (wasLoan != null && wasLoan != loan) {
+                remove(Kinds.TXN, principalLegId(input.id))
+                recalcLoan(wasLoan, from)
+            }
+        }
+
+        private fun saveTxnAndTransfer(input: Transaction) {
             val old = d.transactions[input.id]
             val xfer = input.transferAccountId?.takeIf { it != input.accountId && d.accounts.containsKey(it) }
             if (xfer == null) {
@@ -123,12 +141,53 @@ class Budget(
         fun removeTxn(id: String, removePair: Boolean = true) {
             val t = d.transactions[id] ?: return
             remove(Kinds.TXN, id)
+            t.loanSplit?.let {
+                remove(Kinds.TXN, principalLegId(id))
+                recalcLoan(it.loanAccountId, t.date)
+            }
             val pair = t.transferPairId?.let { d.transactions[it] } ?: return
             if (removePair) {
                 remove(Kinds.TXN, pair.id)
             } else if (pair.transferPairId == id) {
                 // The other leg stays as an ordinary (uncategorized) transaction.
                 putTxn(pair.copy(transferAccountId = null, transferPairId = null))
+            }
+        }
+
+        /**
+         * Recomputes the principal / interest / escrow split of every payment on [loanId] dated on or
+         * after [from], oldest first, since each payment's interest depends on the balance left by the ones before.
+         */
+        fun recalcLoan(loanId: String, from: LocalDate?) {
+            val terms = d.accounts[loanId]?.loan
+            val payments = d.transactions.values
+                .filter { it.loanSplit?.loanAccountId == loanId && (from == null || it.date >= from) }
+                .sortedWith(compareBy({ it.date }, { it.id }))
+            for (p in payments) {
+                val legId = principalLegId(p.id)
+                if (terms == null || p.amount >= 0 || p.transferAccountId != null) {
+                    remove(Kinds.TXN, legId)
+                    putTxn(p.copy(loanSplit = null))
+                    continue
+                }
+                val owed = LoanMath.owedBefore(d.transactions.values.filter { it.accountId == loanId }, p.date, p.id)
+                val (principal, interest, escrow) = LoanMath.split(-p.amount, owed, terms)
+                val split = LoanSplit(loanId, principal, interest, escrow)
+                if (p.loanSplit != split) putTxn(p.copy(loanSplit = split))
+                val leg = Transaction(
+                    id = legId,
+                    accountId = loanId,
+                    date = p.date,
+                    amount = principal,
+                    payee = "Principal payment",
+                    memo = "${p.payee.ifBlank { "Payment" }} ${Money.format(-p.amount)}: interest ${Money.format(interest)}, escrow ${Money.format(escrow)}",
+                    cleared = p.cleared,
+                    loanPaymentOf = p.id,
+                )
+                when {
+                    principal == 0L -> remove(Kinds.TXN, legId)
+                    d.transactions[legId] != leg -> putTxn(leg)
+                }
             }
         }
 
@@ -184,8 +243,11 @@ class Budget(
 
     /** Creates or updates an account. A starting balance is only used for a new account. */
     fun saveAccount(account: Account, startingBalance: Long = 0, startDate: LocalDate? = null): String = edit {
-        val isNew = !d.accounts.containsKey(account.id)
+        val previous = d.accounts[account.id]
+        val isNew = previous == null
         put(Kinds.ACCOUNT, account.id, account, Account.serializer())
+        // New loan terms (e.g. a new escrow amount) apply from the current month on.
+        if (!isNew && previous?.loan != account.loan) recalcLoan(account.id, YearMonth.of(today()).firstDay)
         if (isNew && startingBalance != 0L && startDate != null) {
             putTxn(startingBalanceTxn(newId(), account, startingBalance, startDate))
         }
@@ -222,6 +284,7 @@ class Budget(
     )
 
     fun deleteAccount(id: String) = edit {
+        d.transactions.values.filter { it.loanSplit?.loanAccountId == id }.forEach { putTxn(it.copy(loanSplit = null)) }
         d.transactions.values.filter { it.accountId == id }.map { it.id }.forEach { removeTxn(it, removePair = false) }
         d.scheduled.values.filter { it.accountId == id || it.transferAccountId == id }.forEach { remove(Kinds.SCHEDULED, it.id) }
         remove(Kinds.ACCOUNT, id)
@@ -284,6 +347,7 @@ class Budget(
             transferPairId = if (enteredHasJob) entered.transferPairId else bank.transferPairId,
             cleared = true,
             importId = bank.importId,
+            loanSplit = entered.loanSplit ?: bank.loanSplit.takeIf { !enteredHasJob },
         )
         saveTxn(merged)
     }
@@ -293,6 +357,29 @@ class Budget(
         val entered = d.transactions[enteredId] ?: return@edit
         if (bankId !in entered.notDuplicateOf) putTxn(entered.copy(notDuplicateOf = entered.notDuplicateOf + bankId))
     }
+
+    // ---------------------------------------------------------------- rules and loans
+
+    fun saveRule(rule: PayeeRule) = edit { put(Kinds.RULE, rule.id, rule, PayeeRule.serializer()) }
+
+    fun deleteRule(id: String) = edit { remove(Kinds.RULE, id) }
+
+    /** Creates a rule, or updates the one that already matches the same text. */
+    private fun saveRuleIn(e: Edit, match: String, categoryId: String?, transferAccountId: String?, loanAccountId: String?) = with(e) {
+        val text = ImportMatcher.normalizePayee(match)
+        val existing = d.rules.values.firstOrNull { ImportMatcher.normalizePayee(it.match) == text }
+        val rule = PayeeRule(existing?.id ?: newId(), text, categoryId, transferAccountId.takeIf { loanAccountId == null }, loanAccountId)
+        if (rule != existing) put(Kinds.RULE, rule.id, rule, PayeeRule.serializer())
+    }
+
+    /** Links (or unlinks, with null) a payment to a loan and splits it into principal, interest and escrow. */
+    fun setLoanPayment(txnId: String, loanAccountId: String?) = edit {
+        val t = d.transactions[txnId] ?: return@edit
+        saveTxn(t.copy(loanSplit = loanAccountId?.let { LoanSplit(it, 0, 0, 0) }, transferAccountId = t.transferAccountId.takeIf { loanAccountId == null }))
+    }
+
+    private fun today(): LocalDate =
+        kotlinx.datetime.Instant.fromEpochMilliseconds(clock()).toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
 
     // ---------------------------------------------------------------- scheduled
 
@@ -335,7 +422,11 @@ class Budget(
                 put(Kinds.ACCOUNT, acct.id, acct.copy(importKeys = acct.importKeys + accountKey), Account.serializer())
             }
         }
-        for (row in rows) {
+        // Oldest first, so loan payments split against the right balance.
+        for (row in rows.sortedBy { it.source.date }) {
+            if (row.action == ImportAction.ADD && row.makeRule && row.ruleMatch.isNotBlank()) {
+                saveRuleIn(this, row.ruleMatch, row.categoryId, row.transferAccountId, row.loanAccountId)
+            }
             when (row.action) {
                 ImportAction.SKIP -> skipped++
 
@@ -379,9 +470,10 @@ class Budget(
             payee = row.payee,
             memo = row.source.memo.takeIf { it != row.payee }.orEmpty(),
             categoryId = row.categoryId,
-            transferAccountId = row.transferAccountId,
+            transferAccountId = row.transferAccountId.takeIf { row.loanAccountId == null },
             cleared = true,
             importId = row.importId,
+            loanSplit = row.loanAccountId?.let { LoanSplit(it, 0, 0, 0) },
         )
         val xfer = row.transferAccountId
         if (xfer != null) {
@@ -425,3 +517,6 @@ class Budget(
 
     private fun slug(s: String) = s.lowercase().map { if (it.isLetterOrDigit()) it else '-' }.joinToString("")
 }
+
+/** Id of the principal entry a loan payment creates in the loan account. */
+fun principalLegId(paymentId: String) = "$paymentId-principal"

@@ -131,6 +131,25 @@ class ScreenshotTest {
         nav.openAccount("chk")
         nav.importFile(PickedFile("gas.qbo", Samples.QBO_CHECKING.replace("<TRNAMT>-1200.00", "<TRNAMT>-25.00").replace("20261005", "20261012").replace("20261005001", "GAS1")))
         shot("import-merge-wide", 1800, 1300)
+
+        // Mortgage: a loan account with terms, then a monthly payment arriving from the bank.
+        b.saveAccount(
+            Account("home", "Home Loan", AccountType.LOAN, onBudget = false, loan = com.z.imab.model.LoanTerms(6.0, 40000, 250000)),
+            -30_000_000, month.firstDay.minus(1, DateTimeUnit.DAY),
+        )
+        val mortgageQbo = PickedFile(
+            "mortgage.qbo",
+            Samples.QBO_CHECKING.replace("<NAME>ONLINE TRANSFER TO SAVINGS", "<NAME>MAIN STREET MORTGAGE 0042")
+                .replace("<TRNAMT>-1200.00", "<TRNAMT>-2500.00").replace("<DTPOSTED>20261005", "<DTPOSTED>20261015")
+                .replace("<FITID>20261005001", "<FITID>MORT10"),
+        )
+        nav.openAccount("chk"); nav.importFile(mortgageQbo); shot("import-mortgage-norule-wide", 1800, 1100)
+        b.saveRule(com.z.imab.model.PayeeRule("r1", "main street mortgage", categoryId = "seed-rent-mortgage", loanAccountId = "home"))
+        nav.openAccount("chk"); nav.importFile(mortgageQbo); shot("import-mortgage-rule-wide", 1800, 1100)
+        val mstmt = com.z.imab.importer.OfxParser.parse(mortgageQbo.text).single()
+        b.applyImport("chk", null, com.z.imab.importer.ImportMatcher.analyze(mstmt.transactions.filter { it.fitId == "MORT10" }, "chk", b.data))
+        nav.openAccount("home"); shot("loan-register-wide", 1800, 900)
+        nav.go(Screen.Settings); shot("settings-rules-wide", 1800, 1300)
         store.setTheme("dark")
         nav.go(Screen.Budget); shot("budget-dark-wide", 1800, 1200)
         shot("splash-dark-phone", 620, 1300, splash = true)

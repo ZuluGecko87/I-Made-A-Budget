@@ -5,6 +5,7 @@ import com.z.imab.model.Assignment
 import com.z.imab.model.BudgetData
 import com.z.imab.model.Category
 import com.z.imab.model.CategoryGroup
+import com.z.imab.model.PayeeRule
 import com.z.imab.model.ScheduledTransaction
 import com.z.imab.model.Transaction
 import kotlinx.serialization.EncodeDefault
@@ -53,6 +54,7 @@ object Kinds {
     const val TXN = "txn"
     const val SCHEDULED = "sched"
     const val ASSIGNMENT = "assign"
+    const val RULE = "rule"
 
     fun key(kind: String, id: String) = "$kind/$id"
 }
@@ -120,10 +122,11 @@ class DataBuilder {
     val transactions = HashMap<String, Transaction>()
     val scheduled = HashMap<String, ScheduledTransaction>()
     val assignments = HashMap<String, Assignment>()
+    val rules = HashMap<String, PayeeRule>()
 
     fun clear() {
         accounts.clear(); groups.clear(); categories.clear()
-        transactions.clear(); scheduled.clear(); assignments.clear()
+        transactions.clear(); scheduled.clear(); assignments.clear(); rules.clear()
     }
 
     fun apply(op: Op) {
@@ -138,6 +141,7 @@ class DataBuilder {
             Kinds.TXN -> set(transactions, id, op.data, Transaction.serializer())
             Kinds.SCHEDULED -> set(scheduled, id, op.data, ScheduledTransaction.serializer())
             Kinds.ASSIGNMENT -> set(assignments, id, op.data, Assignment.serializer())
+            Kinds.RULE -> set(rules, id, op.data, PayeeRule.serializer())
         }
     }
 
@@ -159,5 +163,6 @@ class DataBuilder {
         transactions = transactions.toMap(),
         scheduled = scheduled.toMap(),
         assignments = assignments.toMap(),
+        rules = rules.toMap(),
     )
 }

@@ -44,6 +44,39 @@ data class Account(
     /** Bank account identifiers (from QBO/OFX files) that map to this account. */
     val importKeys: List<String> = emptyList(),
     val sortOrder: Int = 0,
+    /** For loans and mortgages: used to split each payment into principal, interest and escrow. */
+    val loan: LoanTerms? = null,
+)
+
+@Serializable
+data class LoanTerms(
+    /** Annual interest rate in percent, e.g. 6.25. */
+    val annualRatePct: Double,
+    val monthlyEscrow: Long = 0,
+    /** Usual total monthly payment including escrow, for the payoff estimate (optional). */
+    val monthlyPayment: Long? = null,
+)
+
+/** How a loan payment was divided. Stored on the payment; the principal also appears in the loan account. */
+@Serializable
+data class LoanSplit(
+    val loanAccountId: String,
+    val principal: Long,
+    val interest: Long,
+    val escrow: Long,
+)
+
+/**
+ * Auto-categorize rule: a bank payee containing [match] (compared as lowercase words) gets this
+ * category or transfer, and optionally is treated as a payment on [loanAccountId].
+ */
+@Serializable
+data class PayeeRule(
+    val id: String,
+    val match: String,
+    val categoryId: String? = null,
+    val transferAccountId: String? = null,
+    val loanAccountId: String? = null,
 )
 
 @Serializable
@@ -91,6 +124,10 @@ data class Transaction(
     val scheduledId: String? = null,
     /** Transactions the user said are not duplicates of this one, so they aren't offered for merging. */
     val notDuplicateOf: List<String> = emptyList(),
+    /** Set on a payment toward a loan: how it splits into principal, interest and escrow. */
+    val loanSplit: LoanSplit? = null,
+    /** Set on the principal entry in a loan account: the payment it came from. */
+    val loanPaymentOf: String? = null,
 )
 
 @Serializable

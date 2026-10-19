@@ -87,6 +87,8 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers) {
             }
         }
 
+        RulesCard(data, store.budget)
+
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

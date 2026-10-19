@@ -49,6 +49,8 @@ import com.z.imab.importer.ImportAction
 import com.z.imab.importer.ImportMatcher
 import com.z.imab.importer.ImportRow
 import com.z.imab.importer.ImportWindow
+import com.z.imab.importer.RuleBook
+import com.z.imab.model.PayeeRule
 import com.z.imab.importer.MatchKind
 import com.z.imab.importer.OfxParser
 import com.z.imab.importer.OfxStatement
@@ -99,6 +101,24 @@ private class StatementState(val stmt: OfxStatement) {
         rows.clear()
         val id = accountId ?: return
         rows.addAll(ImportMatcher.analyze(stmt.transactions.filter { it.date >= from }, id, data))
+    }
+
+    /** Updates a row; when it will become a rule, the same choice is applied to matching rows in this file. */
+    fun updateRow(index: Int, row: ImportRow) {
+        rows[index] = row
+        if (!row.makeRule || row.ruleMatch.isBlank()) return
+        val rule = PayeeRule("", row.ruleMatch, row.categoryId, row.transferAccountId, row.loanAccountId)
+        rows.indices.filter { it != index }.forEach { i ->
+            val r = rows[i]
+            if (r.action == ImportAction.ADD && RuleBook.matches(rule, r.payee)) {
+                rows[i] = r.copy(
+                    categoryId = row.categoryId,
+                    transferAccountId = row.transferAccountId,
+                    loanAccountId = row.loanAccountId,
+                    reason = "New · same as \"${row.ruleMatch}\" above",
+                )
+            }
+        }
     }
 
     fun setDuplicates(action: ImportAction) {
@@ -205,7 +225,7 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
                 st.showDuplicates || r.kind != MatchKind.DUPLICATE || r.action != ImportAction.SKIP
             }
             itemsIndexed(visible, key = { _, iv -> "row-${st.stmt.accountKey}-${iv.index}" }) { _, (index, row) ->
-                ImportRowView(row, data, st.accountId) { st.rows[index] = it }
+                ImportRowView(row, data, st.accountId) { st.updateRow(index, it) }
             }
         }
 
@@ -420,8 +440,35 @@ private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, 
                     "Category",
                     categoryOptions(data, accountId),
                     Choice.of(row.categoryId, row.transferAccountId),
-                    { onChange(row.copy(categoryId = Choice.categoryId(it), transferAccountId = Choice.transferId(it))) },
+                    {
+                        val transfer = Choice.transferId(it)
+                        onChange(row.copy(categoryId = Choice.categoryId(it), transferAccountId = transfer, loanAccountId = row.loanAccountId.takeIf { transfer == null }))
+                    },
                     Modifier.width(260.dp),
+                )
+                val loans = data.loanAccounts.filter { it.id != accountId }
+                if (loans.isNotEmpty() && row.source.amount < 0 && row.transferAccountId == null) {
+                    Picker(
+                        "Loan payment",
+                        listOf(PickerOption<String?>(null, "Not a loan payment")) + loans.map { PickerOption<String?>(it.id, "Payment on ${it.name}") },
+                        row.loanAccountId,
+                        { onChange(row.copy(loanAccountId = it)) },
+                        Modifier.width(260.dp),
+                    )
+                }
+            }
+        }
+        val existingRule = RuleBook.find(data, row.payee)
+        val ruleAlreadyDoesThis = existingRule != null && existingRule.categoryId == row.categoryId &&
+            existingRule.transferAccountId == row.transferAccountId && existingRule.loanAccountId == row.loanAccountId
+        if (row.action == ImportAction.ADD && row.ruleMatch.isNotBlank() && !ruleAlreadyDoesThis &&
+            (row.categoryId != null || row.transferAccountId != null || row.loanAccountId != null)
+        ) {
+            Row(Modifier.padding(start = 60.dp), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(row.makeRule, { onChange(row.copy(makeRule = it)) })
+                Text(
+                    "Always use this for payees containing \"${row.ruleMatch}\"",
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         }

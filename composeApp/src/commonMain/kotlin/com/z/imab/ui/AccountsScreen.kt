@@ -210,6 +210,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                 )
             }
+            if (account?.type == com.z.imab.model.AccountType.LOAN) LoanSummary(account, data) { editingAccount = true }
             cardInfo?.let { c ->
                 Text(
                     when {
@@ -330,6 +331,7 @@ private fun TxnRow(
                 append(data.categoryLabel(t))
                 if (t.memo.isNotBlank()) append(" · ").append(t.memo)
                 if (t.scheduledId != null && !t.cleared) append(" · scheduled")
+                t.loanSplit?.let { append(" · principal ${Money.format(it.principal)}, interest ${Money.format(it.interest)}, escrow ${Money.format(it.escrow)}") }
                 if (possibleDuplicate) append(" · possible duplicate")
             }
             Text(

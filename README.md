@@ -25,9 +25,24 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   - already-imported transactions are marked **Duplicate** and ignored (by bank id, or by same date + amount + payee), with a warning that lets you review them or import them anyway;
   - transactions you entered by hand, scheduled ones, and the other side of a transfer are **matched** within ±4 days instead of being added twice;
   - an upcoming scheduled transaction the bank already posted is matched and the schedule moves on;
-  - new transactions get the category you last used for that payee;
+  - new transactions come in **uncategorized** unless an auto-categorize rule matches (tick *Always use this for payees containing …* on a row, or manage rules in Settings);
   - the bank account is remembered, so the next file from it goes to the right account.
 - **Sync** through OneDrive, Google Drive or Dropbox.
+
+## Loans and mortgages
+
+Give a Loan account its principal remaining, interest rate and monthly escrow. Link payments to it
+(the *Loan payment* option on a transaction, or a rule such as "main street mortgage" → Mortgage,
+payment on Home Loan). Each payment is split:
+
+- interest = principal owed before the payment × rate ÷ 12
+- escrow = the monthly escrow you set
+- principal = payment − interest − escrow, which reduces the loan balance
+
+The whole payment is still budgeted from its category. Payments are recalculated in date order
+whenever one is added, edited or removed; changed loan terms apply from the current month. The
+loan screen shows principal left, principal and interest paid so far, the last payment's split, and
+an estimated payoff date with the interest still to pay.
 
 ## Credit cards
 

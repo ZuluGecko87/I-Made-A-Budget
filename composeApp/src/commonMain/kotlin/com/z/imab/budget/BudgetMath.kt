@@ -87,7 +87,8 @@ object BudgetMath {
         fun at(m: YearMonth) = activity.getOrPut(m) { MonthActivity() }
 
         for (t in data.transactions.values) {
-            if (!data.isOnBudget(t.accountId)) continue
+            // Principal entries in a loan account are tracking only; the payment itself is budgeted.
+            if (!data.isOnBudget(t.accountId) || t.loanPaymentOf != null) continue
             val m = YearMonth.of(t.date)
             val onCard = t.accountId in paymentIds
             if (data.isInternalTransfer(t)) {

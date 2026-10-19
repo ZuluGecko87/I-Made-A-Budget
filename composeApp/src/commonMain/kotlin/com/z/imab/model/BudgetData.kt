@@ -8,7 +8,11 @@ data class BudgetData(
     val transactions: Map<String, Transaction> = emptyMap(),
     val scheduled: Map<String, ScheduledTransaction> = emptyMap(),
     val assignments: Map<String, Assignment> = emptyMap(),
+    val rules: Map<String, PayeeRule> = emptyMap(),
 ) {
+    /** Loan accounts with terms set, which payments can be linked to. */
+    val loanAccounts: List<Account> by lazy { sortedAccounts.filter { it.loan != null && !it.closed } }
+
     val sortedAccounts: List<Account> by lazy {
         accounts.values.sortedWith(
             compareBy<Account>({ it.closed }, { !it.onBudget }, { it.sortOrder }, { it.name.lowercase() })
@@ -62,7 +66,7 @@ data class BudgetData(
 
     /** Whether this transaction affects the budget but still lacks a category. */
     fun needsCategory(t: Transaction): Boolean {
-        if (!isOnBudget(t.accountId) || isInternalTransfer(t)) return false
+        if (!isOnBudget(t.accountId) || isInternalTransfer(t) || t.loanPaymentOf != null) return false
         val c = t.categoryId
         if (c == PREEXISTING_DEBT && isCreditAccount(t.accountId)) return false
         return c == null || (c != READY_TO_ASSIGN && c !in categories)

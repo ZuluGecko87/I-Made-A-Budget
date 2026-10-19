@@ -2,7 +2,6 @@ package com.z.imab.importer
 
 import com.z.imab.budget.Scheduler
 import com.z.imab.model.BudgetData
-import com.z.imab.model.READY_TO_ASSIGN
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
@@ -26,6 +25,11 @@ data class ImportRow(
     /** For ADD: the category or transfer account to use. */
     val categoryId: String? = null,
     val transferAccountId: String? = null,
+    /** For ADD: treat as a payment on this loan (split into principal, interest and escrow). */
+    val loanAccountId: String? = null,
+    /** For ADD: save the choice above as a rule for payees containing [ruleMatch]. */
+    val makeRule: Boolean = false,
+    val ruleMatch: String = "",
 ) {
     val payee: String get() = source.name.ifBlank { source.memo }
 }
@@ -61,7 +65,6 @@ object ImportMatcher {
         val claimed = HashSet<String>()
         val claimedSchedule = HashSet<String>()
         val seenInFile = HashSet<String>()
-        val history = PayeeHistory(data)
 
         return withImportIds(txns).map { (src, importId) ->
             if (!seenInFile.add(importId)) {
@@ -121,12 +124,17 @@ object ImportMatcher {
                 )
             }
 
-            val guess = history.guess(src.name)
+            // Imports stay uncategorized unless one of your rules says otherwise.
+            val name = src.name.ifBlank { src.memo }
+            val rule = RuleBook.find(data, name)
             ImportRow(
-                src, importId, MatchKind.NEW, if (guess != null) "New - category from past payee" else "New",
+                src, importId, MatchKind.NEW,
+                if (rule != null) "New · rule \"${rule.match}\" → ${RuleBook.describe(data, rule)}" else "New",
                 ImportAction.ADD,
-                categoryId = guess?.categoryId,
-                transferAccountId = guess?.transferAccountId?.takeIf { it != accountId },
+                categoryId = rule?.categoryId,
+                transferAccountId = rule?.transferAccountId?.takeIf { it != accountId },
+                loanAccountId = rule?.loanAccountId?.takeIf { it != accountId && data.accounts[it]?.loan != null },
+                ruleMatch = RuleBook.suggestedMatch(name),
             )
         }
     }
@@ -160,34 +168,4 @@ object ImportMatcher {
     fun normalizePayee(s: String): String =
         s.lowercase().map { if (it.isLetter()) it else ' ' }.joinToString("")
             .split(' ').filter { it.isNotEmpty() }.joinToString(" ")
-
-    /** Remembers the category last used for each payee so new imports can be pre-filled. */
-    class PayeeHistory(data: BudgetData) {
-        data class Guess(val categoryId: String?, val transferAccountId: String?)
-
-        private val exact = HashMap<String, Guess>()
-        private val firstWords = HashMap<String, Guess>()
-
-        init {
-            data.transactions.values
-                .filter { it.categoryId != null || it.transferAccountId != null }
-                .sortedBy { it.date }
-                .forEach { t ->
-                    val key = normalizePayee(t.payee)
-                    if (key.isEmpty()) return@forEach
-                    val g = Guess(t.categoryId?.takeIf { it in data.categories || it == READY_TO_ASSIGN }, t.transferAccountId)
-                    if (g.categoryId == null && g.transferAccountId == null) return@forEach
-                    exact[key] = g
-                    firstWords[prefix(key)] = g
-                }
-        }
-
-        private fun prefix(key: String) = key.split(' ').take(2).joinToString(" ")
-
-        fun guess(payee: String): Guess? {
-            val key = normalizePayee(payee)
-            if (key.isEmpty()) return null
-            return exact[key] ?: firstWords[prefix(key)]?.takeIf { prefix(key).length >= 4 }
-        }
-    }
 }

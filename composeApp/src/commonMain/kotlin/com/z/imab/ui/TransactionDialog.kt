@@ -25,6 +25,9 @@ import com.z.imab.model.Account
 import com.z.imab.model.AccountType
 import com.z.imab.model.BudgetData
 import com.z.imab.model.Frequency
+import com.z.imab.model.LoanTerms
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import com.z.imab.model.Money
 import com.z.imab.model.ScheduledTransaction
 import com.z.imab.model.Transaction
@@ -99,6 +102,7 @@ fun TransactionDialog(
         )
     }
     var cleared by remember { mutableStateOf(initial?.cleared ?: false) }
+    var loanId by remember { mutableStateOf(initial?.loanSplit?.loanAccountId) }
     var confirmDelete by remember { mutableStateOf(false) }
     // A prefilled template (e.g. a card payment) isn't saved yet, so it's still "new".
     val isNew = initial == null || initial.id !in data.transactions
@@ -110,6 +114,26 @@ fun TransactionDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TxnFields(form, data, "Date")
+                val loans = data.loanAccounts.filter { it.id != form.accountId }
+                if (loans.isNotEmpty() && form.outflow && Choice.transferId(form.choice) == null) {
+                    Picker(
+                        "Loan payment",
+                        listOf(PickerOption<String?>(null, "Not a loan payment")) + loans.map { PickerOption<String?>(it.id, "Payment on ${it.name}") },
+                        loanId,
+                        { loanId = it },
+                        Modifier.fillMaxWidth(),
+                    )
+                    val split = initial?.loanSplit?.takeIf { it.loanAccountId == loanId }
+                    Text(
+                        when {
+                            loanId == null -> "Link a mortgage or loan payment to split it into principal, interest and escrow."
+                            split != null -> "Principal ${Money.format(split.principal)} · interest ${Money.format(split.interest)} · escrow ${Money.format(split.escrow)}"
+                            else -> "Split into principal, interest and escrow when saved."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(cleared, { cleared = it })
                     Text("Cleared")
@@ -136,6 +160,9 @@ fun TransactionDialog(
                         // Changing the transfer target re-links to a new leg.
                         transferPairId = base.transferPairId.takeIf { transfer != null && transfer == base.transferAccountId },
                         cleared = cleared,
+                        loanSplit = loanId?.takeIf { transfer == null && amount < 0 }?.let { id ->
+                            base.loanSplit?.takeIf { it.loanAccountId == id } ?: com.z.imab.model.LoanSplit(id, 0, 0, 0)
+                        },
                     )
                 )
             }) { Text("Save") }
@@ -255,7 +282,17 @@ fun AccountDialog(
     var balanceText by remember { mutableStateOf(if (suggestedBalance == 0L) "" else Money.toInput(suggestedBalance)) }
     var startDate by remember { mutableStateOf(suggestedDate) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val balance = if (balanceText.isBlank()) 0L else Money.parse(balanceText)
+    val isLoan = type == AccountType.LOAN
+    // Loans are entered as the positive principal remaining and stored as debt.
+    val balance = (if (balanceText.isBlank()) 0L else Money.parse(balanceText))?.let { if (isLoan) -kotlin.math.abs(it) else it }
+    var rateText by remember { mutableStateOf(initial?.loan?.annualRatePct?.toString().orEmpty()) }
+    var escrowText by remember { mutableStateOf(initial?.loan?.monthlyEscrow?.takeIf { it > 0 }?.let(Money::toInput).orEmpty()) }
+    var paymentText by remember { mutableStateOf(initial?.loan?.monthlyPayment?.let(Money::toInput).orEmpty()) }
+    val rate = rateText.trim().removeSuffix("%").toDoubleOrNull()?.takeIf { it in 0.0..100.0 }
+    val escrow = if (escrowText.isBlank()) 0L else Money.parse(escrowText)
+    val payment = if (paymentText.isBlank()) null else Money.parse(paymentText)
+    val loanValid = !isLoan || rateText.isBlank() || (rate != null && escrow != null && (paymentText.isBlank() || payment != null))
+    val loanTerms = if (isLoan && rate != null && escrow != null) LoanTerms(rate, kotlin.math.abs(escrow), payment?.let { kotlin.math.abs(it) }) else null
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -272,9 +309,34 @@ fun AccountDialog(
                     }
                 }
                 if (initial == null) {
-                    MoneyField("Current balance (negative for debt)", balanceText, { balanceText = it }, Modifier.fillMaxWidth(), isError = balance == null)
+                    MoneyField(
+                        if (isLoan) "Principal remaining" else "Current balance (negative for debt)",
+                        balanceText, { balanceText = it }, Modifier.fillMaxWidth(), isError = balance == null,
+                    )
                     DateField("Balance as of", startDate, { startDate = it }, Modifier.fillMaxWidth())
-                } else {
+                }
+                if (isLoan) {
+                    Text("Loan details", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Used to split each payment into interest, escrow and principal. Link payments from the transaction, " +
+                            "or with a rule when importing.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedTextField(
+                        rateText, { rateText = it },
+                        label = { Text("Interest rate (% per year)") },
+                        singleLine = true,
+                        isError = rateText.isNotBlank() && rate == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    MoneyField("Monthly escrow (taxes & insurance)", escrowText, { escrowText = it }, Modifier.fillMaxWidth(), isError = escrow == null)
+                    MoneyField("Usual monthly payment incl. escrow (optional)", paymentText, { paymentText = it }, Modifier.fillMaxWidth(), isError = paymentText.isNotBlank() && payment == null)
+                    if (initial?.loan != null) {
+                        Text("Changes apply to payments from this month on.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (initial != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(closed, { closed = it })
                         Text("Closed")
@@ -283,8 +345,11 @@ fun AccountDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = name.isNotBlank() && balance != null, onClick = {
-                val a = (initial ?: Account(newId(), name)).copy(name = name.trim(), type = type, onBudget = onBudget, closed = closed)
+            TextButton(enabled = name.isNotBlank() && balance != null && loanValid, onClick = {
+                val a = (initial ?: Account(newId(), name)).copy(
+                    name = name.trim(), type = type, onBudget = onBudget, closed = closed,
+                    loan = if (isLoan) loanTerms else null,
+                )
                 onSave(a, balance ?: 0, startDate)
             }) { Text("Save") }
         },
