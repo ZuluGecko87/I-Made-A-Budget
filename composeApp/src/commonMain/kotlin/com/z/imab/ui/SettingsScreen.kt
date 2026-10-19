@@ -76,6 +76,18 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers) {
                 )
                 Text(syncText(sync), color = if (sync is SyncStatus.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                val location = settings.syncId?.let { com.z.imab.platform.SyncLocation(it, settings.syncName ?: it) }
+                val cloudApp = location?.let(pickers::syncAppName)
+                if (location != null && cloudApp != null) {
+                    Text(
+                        "On this phone the $cloudApp app uploads the budget file, and Android may hold that back while " +
+                            "$cloudApp is in the background. If another device doesn't see a change, open $cloudApp " +
+                            "to upload it now (setting $cloudApp's battery use to Unrestricted helps too).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedButton(onClick = { pickers.openSyncApp(location) }) { Text("Open $cloudApp to upload now") }
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { pick { pickers.createSyncFile() } }) { Text("Create sync file…") }
                     OutlinedButton(onClick = { pick { pickers.openSyncFile() } }) { Text("Use existing sync file…") }

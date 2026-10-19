@@ -107,11 +107,44 @@ class Ledger {
     }
 
     companion object {
-        /** Throws if [text] isn't an IMAB ledger file. */
+        /**
+         * Throws if [text] isn't an IMAB ledger file. Anything after the budget itself is ignored:
+         * some cloud apps on Android overwrite a file without cutting it to the new length, leaving
+         * the tail of the previous version behind.
+         */
         fun decode(text: String): List<Op> {
-            val file = ImabJson.decodeFromString(LedgerFile.serializer(), text)
+            val file = ImabJson.decodeFromString(LedgerFile.serializer(), firstJsonObject(text))
             require(file.format == LedgerFile.FORMAT) { "Not an IMAB budget file" }
             return file.ops
+        }
+
+        /** True if [text] has leftover bytes after the budget, so the file should be rewritten clean. */
+        fun hasLeftovers(text: String): Boolean = firstJsonObject(text).length < text.trim().length
+
+        /** The first complete top-level JSON object in [text] (strings and escapes respected). */
+        internal fun firstJsonObject(text: String): String {
+            val start = text.indexOf('{')
+            if (start < 0) return text
+            var depth = 0
+            var inString = false
+            var escaped = false
+            for (i in start until text.length) {
+                val c = text[i]
+                if (inString) {
+                    when {
+                        escaped -> escaped = false
+                        c == '\\' -> escaped = true
+                        c == '"' -> inString = false
+                    }
+                    continue
+                }
+                when (c) {
+                    '"' -> inString = true
+                    '{' -> depth++
+                    '}' -> if (--depth == 0) return text.substring(start, i + 1)
+                }
+            }
+            return text
         }
     }
 }

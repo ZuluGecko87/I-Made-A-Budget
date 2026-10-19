@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -48,14 +49,20 @@ class AndroidStorage(private val context: Context) : Storage {
         listOf(text)
     }
 
-    override suspend fun writeSync(location: SyncLocation, text: String) = withContext(Dispatchers.IO) {
+    override suspend fun writeSync(location: SyncLocation, text: String): Unit = withContext(Dispatchers.IO) {
         val uri = Uri.parse(location.id)
         val bytes = text.encodeToByteArray()
-        // "wt" truncates; not every cloud provider supports it, so fall back to plain "w".
-        val stream = runCatching { context.contentResolver.openOutputStream(uri, "wt") }.getOrNull()
-            ?: context.contentResolver.openOutputStream(uri, "w")
-            ?: error("Can't write the sync file.")
-        stream.use { it.write(bytes) }
+        // Not every cloud provider honours the truncating modes, so also cut the file to length
+        // ourselves; otherwise a shorter write leaves the end of the old file behind.
+        val pfd = listOf("rwt", "wt", "w").firstNotNullOfOrNull { mode ->
+            runCatching { context.contentResolver.openFileDescriptor(uri, mode) }.getOrNull()
+        } ?: error("Can't write the sync file.")
+        ParcelFileDescriptor.AutoCloseOutputStream(pfd).use { out ->
+            runCatching { out.channel.truncate(0) }
+            out.write(bytes)
+            out.flush()
+            runCatching { out.channel.truncate(bytes.size.toLong()) }
+        }
     }
 }
 
@@ -111,6 +118,26 @@ class AndroidPickers(private val activity: ComponentActivity) : Pickers {
         }
         val name = displayName(uri)
         return SyncLocation(uri.toString(), if (provider != null) "$provider › $name" else name)
+    }
+
+    override fun syncAppName(location: SyncLocation): String? = cloudApp(location)?.first
+
+    override fun openSyncApp(location: SyncLocation): Boolean {
+        val pkg = cloudApp(location)?.second ?: return false
+        val intent = activity.packageManager.getLaunchIntentForPackage(pkg) ?: return false
+        activity.startActivity(intent)
+        return true
+    }
+
+    /** The cloud app behind a sync file, as (name, package). */
+    private fun cloudApp(location: SyncLocation): Pair<String, String>? {
+        val authority = Uri.parse(location.id).authority.orEmpty()
+        return when {
+            "skydrive" in authority || "onedrive" in authority -> "OneDrive" to "com.microsoft.skydrive"
+            "com.google.android.apps.docs" in authority -> "Google Drive" to "com.google.android.apps.docs"
+            "dropbox" in authority -> "Dropbox" to "com.dropbox.android"
+            else -> null
+        }
     }
 
     private fun displayName(uri: Uri): String =

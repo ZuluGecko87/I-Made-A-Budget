@@ -3,6 +3,7 @@ package com.z.imab
 import com.z.imab.data.BudgetStore
 import com.z.imab.data.SyncStatus
 import com.z.imab.model.Account
+import com.z.imab.model.AccountType
 import com.z.imab.model.Transaction
 import com.z.imab.platform.Storage
 import com.z.imab.platform.SyncLocation
@@ -95,6 +96,31 @@ class SyncTest {
         mac.syncNow()
         assertTrue("c" in mac.data.value.accounts)
         assertTrue("c" in cloud.main)
+    }
+
+    @Test
+    fun fileWithLeftoversFromAnUntruncatedWriteStillSyncsAndIsCleaned() = runBlocking {
+        val cloud = Cloud()
+        val phone = device(cloud, "phone")
+        phone.budget.saveAccount(Account("chk", "Checking {main}", AccountType.CHECKING))
+        phone.syncNow()
+        val longer = cloud.main
+        // The phone writes a shorter version, and the cloud app doesn't cut off the old end.
+        phone.budget.saveAccount(Account("chk", "Checking", AccountType.CHECKING))
+        phone.budget.deleteCategory("seed-gifts")
+        phone.syncNow()
+        val shorter = cloud.main
+        assertTrue(shorter.length < longer.length)
+        cloud.main = shorter + longer.substring(shorter.length)
+
+        val mac = device(cloud, "mac")
+        mac.syncNow()
+        assertIs<SyncStatus.Synced>(mac.syncStatus.value)
+        assertEquals("Checking", mac.data.value.accounts.getValue("chk").name)
+        assertTrue("seed-gifts" !in mac.data.value.categories)
+        // The Mac wrote the file back without the leftovers.
+        assertEquals(cloud.main.trim(), com.z.imab.data.Ledger.firstJsonObject(cloud.main))
+        assertTrue(com.z.imab.data.Ledger.decode(cloud.main).isNotEmpty())
     }
 
     @Test

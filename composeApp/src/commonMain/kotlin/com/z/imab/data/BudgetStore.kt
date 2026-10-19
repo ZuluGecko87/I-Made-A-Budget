@@ -187,7 +187,8 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
             val pulled = budget.merge(remote + copies)
             if (pulled > 0) budget.processScheduled(today())
 
-            val push = !budget.ledger.sameAs(remote)
+            // Rewrite when the file is missing changes, or when it has leftovers from an untruncated write.
+            val push = !budget.ledger.sameAs(remote) || (mainText.isNotBlank() && Ledger.hasLeftovers(mainText))
             if (push) storage.writeSync(location, budget.ledger.encode())
             _sync.value = SyncStatus.Synced(now(), pulled, push)
         } catch (e: Exception) {

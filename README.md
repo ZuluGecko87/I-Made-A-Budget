@@ -97,6 +97,11 @@ and pick that same file.
 
 - **Mac**: cloud drives appear in the file dialog sidebar (they live under `~/Library/CloudStorage`).
 - **Android**: in the picker, open the ☰ menu and choose OneDrive, Drive or Dropbox. That service's app must be installed and signed in.
+  The service's app does the uploading, and Android can block a background app's network to save
+  battery, so a change made on the phone may wait until that app runs. Settings → *Open OneDrive to
+  upload now* (or setting the app's battery use to Unrestricted) gets it uploaded straight away.
+  Some of these apps don't cut a file to its new length when it's overwritten; IMAB trims it itself,
+  ignores leftovers when reading, and rewrites such a file clean.
 
 ## Build
 

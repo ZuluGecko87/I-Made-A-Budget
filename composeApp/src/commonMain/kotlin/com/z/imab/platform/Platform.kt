@@ -40,4 +40,13 @@ interface Pickers {
 
     /** Whether bank files can be dragged onto the window (desktop). */
     val supportsFileDrop: Boolean get() = false
+
+    /**
+     * On Android the cloud app (OneDrive, Drive, Dropbox) uploads the sync file itself, and the
+     * system may hold that back while the app is in the background. Its name, if there is one.
+     */
+    fun syncAppName(location: SyncLocation): String? = null
+
+    /** Brings the cloud app forward so it uploads now. Returns false if it can't be opened. */
+    fun openSyncApp(location: SyncLocation): Boolean = false
 }
