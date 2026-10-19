@@ -317,22 +317,21 @@ fun AccountDialog(
                     if (type == AccountType.INVESTMENT && it != AccountType.INVESTMENT) onBudget = true
                     type = it
                 }, Modifier.fillMaxWidth())
-                if (isLoan) {
-                    Text(
-                        "Loans are tracked outside the budget, so what you owe doesn't reduce Ready to Assign. " +
-                            "Budget the payments you make from checking (e.g. in a Mortgage category) and link them to this loan.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(onBudget, { onBudget = it })
-                        Column {
-                            Text("Budget account")
-                            Text("Off = tracking only (e.g. investments)", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
+                // Budget vs tracking, as an explicit choice. Loans and mortgages are always tracking.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(onBudget && !isLoan, { onBudget = true }, enabled = !isLoan, label = { Text("Budget account") })
+                    FilterChip(!onBudget || isLoan, { onBudget = false }, label = { Text("Tracking account") })
                 }
+                Text(
+                    when {
+                        isLoan -> "Loans and mortgages are always tracking accounts: what you owe doesn't reduce Ready to Assign. " +
+                            "Budget the payments you make from checking (e.g. in a Mortgage category) and link them to this loan."
+                        onBudget -> "Money in this account can be assigned in your budget. Use this for checking, savings, cash and credit cards."
+                        else -> "Tracking only: the balance is shown but isn't part of your budget (e.g. investments)."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 if (initial == null || isLoan) {
                     MoneyField(
                         when {
