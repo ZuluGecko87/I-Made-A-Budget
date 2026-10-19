@@ -62,7 +62,7 @@ private fun TxnFields(form: TxnForm, data: BudgetData, dateLabel: String) {
     DateField(dateLabel, form.date, { form.date = it }, Modifier.fillMaxWidth())
     val isTransfer = Choice.transferId(form.choice) != null
     if (!isTransfer) {
-        OutlinedTextField(form.payee, { form.payee = it }, label = { Text("Payee") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        PayeeField(form.payee, { form.payee = it }, data, Modifier.fillMaxWidth())
     }
     Picker("Category or transfer", categoryOptions(data, form.accountId), form.choice, { form.choice = it }, Modifier.fillMaxWidth())
     if (isTransfer) {

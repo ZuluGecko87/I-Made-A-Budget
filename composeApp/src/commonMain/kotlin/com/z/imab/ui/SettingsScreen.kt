@@ -114,6 +114,8 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers) {
             }
         }
 
+        PayeesCard(data, store.budget)
+
         RulesCard(data, store.budget)
 
         Card(Modifier.fillMaxWidth()) {

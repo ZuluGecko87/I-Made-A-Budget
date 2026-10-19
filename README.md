@@ -28,6 +28,11 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   - The **Goals** tab lists them all and is where you add them; Import is on the Accounts page.
 - **You can't assign more than you have**: assigning is capped at what's in Ready to Assign
   (lowering an amount is always allowed).
+- On a phone each category shows what was spent under its name; tap it (or *Show activity* in the
+  category menu) to see the transactions behind it.
+- **Payees**: the payee field suggests payees you've used before as you type (most-used first) and
+  always offers to add a new one. Settings → Payees lets you rename a payee everywhere, or merge
+  a misspelling into the right one.
 - Tap a category's name to rename it, move it to another group, or set its goal; tap its numbers to assign money.
 - Add a transaction from the account list with the **+** next to each account, or inside an account.
 - **Bank import** of QuickBooks `.qbo` files (`.qfx` and `.ofx` work too). On the Mac you can drag

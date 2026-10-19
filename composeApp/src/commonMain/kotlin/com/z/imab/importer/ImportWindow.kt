@@ -7,7 +7,7 @@ import kotlinx.datetime.plus
 
 /** Decides how far back in a bank file to look when importing into an account. */
 object ImportWindow {
-    const val STARTING_BALANCE_PAYEE = "Starting Balance"
+    const val STARTING_BALANCE_PAYEE = com.z.imab.model.STARTING_BALANCE_PAYEE
 
     /** Date of the newest transaction that came from a bank file, or null if the account was never imported into. */
     fun lastImportDate(data: BudgetData, accountId: String): LocalDate? =

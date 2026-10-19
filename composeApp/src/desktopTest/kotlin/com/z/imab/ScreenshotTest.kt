@@ -105,6 +105,7 @@ class ScreenshotTest {
         shot("splash-wide", 1800, 1100, splash = true)
         shot("budget-wide", 1800, 1200)
         shot("budget-phone", 620, 1300)
+        shot("budget-phone-tall", 620, 2400)
         nav.openAccount("chk"); shot("register-wide", 1800, 1200)
         nav.openAccount("cc"); shot("register-card-wide", 1800, 1000)
         nav.go(Screen.Accounts); shot("accounts-phone", 620, 1300)
@@ -172,6 +173,33 @@ class ScreenshotTest {
         }
         dialogShot("dialog-new-mortgage") {
             com.z.imab.ui.AccountDialog(null, { "x" }, suggestedName = "House", suggestedType = AccountType.MORTGAGE, onSave = { _, _, _ -> }, onDelete = null, onDismiss = {})
+        }
+        dialogShot("dialog-payee-suggest") {
+            com.z.imab.ui.TransactionDialog(
+                b.data, Transaction("draft", "chk", today(), -1000, "Kr"), "chk", { "x" },
+                onSave = {}, onDelete = null, onDismiss = {},
+            )
+        }
+        run {
+            // Click the payee field's arrow to open its suggestions.
+            val scene = ImageComposeScene(1100, 1500, Density(1.5f)) {
+                androidx.compose.material3.MaterialTheme(colorScheme = com.z.imab.ui.LightColors) {
+                    androidx.compose.material3.Surface(Modifier.fillMaxSize()) {}
+                    com.z.imab.ui.TransactionDialog(b.data, Transaction("draft", "chk", today(), -1000, "Kr"), "chk", { "x" }, onSave = {}, onDelete = null, onDismiss = {})
+                }
+            }
+            for (ms in 0L until 400L step 100L) scene.render(ms * 1_000_000)
+            val arrow = androidx.compose.ui.geometry.Offset(898f / 1.5f * 1.5f, 528f)
+            @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+            fun click(at: androidx.compose.ui.geometry.Offset) {
+                scene.sendPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Move, at)
+                scene.sendPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Press, at)
+                scene.sendPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Release, at)
+            }
+            click(arrow)
+            for (ms in 400L until 900L step 100L) scene.render(ms * 1_000_000)
+            File(out, "dialog-payee-open.png").writeBytes(scene.render(900_000_000).encodeToData(EncodedImageFormat.PNG)!!.bytes)
+            scene.close()
         }
         dialogShot("dialog-edit-loan") {
             com.z.imab.ui.AccountDialog(b.data.accounts.getValue("home"), { "x" }, currentBalance = b.data.balance("home"), onSave = { _, _, _ -> }, onDelete = {}, onDismiss = {})

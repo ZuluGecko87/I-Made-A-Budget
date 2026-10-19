@@ -337,6 +337,18 @@ class Budget(
         remove(Kinds.CATEGORY, id)
     }
 
+    /**
+     * Renames a payee on every transaction and schedule that uses it, e.g. to fix a misspelling.
+     * Renaming to a payee that already exists merges the two.
+     */
+    fun renamePayee(from: String, to: String) = edit {
+        val old = from.trim()
+        val new = to.trim()
+        if (old.isEmpty() || new.isEmpty() || old == new) return@edit
+        d.transactions.values.filter { it.payee.trim() == old }.forEach { putTxn(it.copy(payee = new)) }
+        d.scheduled.values.filter { it.payee.trim() == old }.forEach { putScheduled(it.copy(payee = new)) }
+    }
+
     fun saveCombinedGoal(g: CombinedGoal) = edit { put(Kinds.COMBINED_GOAL, g.id, g, CombinedGoal.serializer()) }
 
     fun deleteCombinedGoal(id: String) = edit { remove(Kinds.COMBINED_GOAL, id) }

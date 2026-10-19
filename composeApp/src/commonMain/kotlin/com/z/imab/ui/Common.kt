@@ -17,6 +17,9 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -324,5 +327,46 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Compos
             trailing()
         }
         HorizontalDivider()
+    }
+}
+
+/**
+ * Payee entry with suggestions: as you type it lists payees used before (most-used first) to pick
+ * from, and always offers to add what you typed as a new payee.
+ */
+@Composable
+fun PayeeField(value: String, onChange: (String) -> Unit, data: BudgetData, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    val typed = value.trim()
+    val matches = remember(data, typed) { data.searchPayees(typed) }
+    val exact = matches.any { it.equals(typed, ignoreCase = true) }
+    Box(modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { onChange(it); open = true },
+            label = { Text("Payee") },
+            placeholder = { Text("Search or add a payee") },
+            singleLine = true,
+            trailingIcon = {
+                IconButton(onClick = { open = !open }) { Icon(Icons.Default.ArrowDropDown, "Show payees") }
+            },
+            modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused && typed.isEmpty()) open = true },
+        )
+        DropdownMenu(
+            expanded = open && (matches.isNotEmpty() || typed.isNotEmpty()),
+            onDismissRequest = { open = false },
+            // Don't take focus, so typing continues in the field while suggestions show.
+            properties = PopupProperties(focusable = false),
+        ) {
+            matches.filterNot { it == typed }.forEach { p ->
+                DropdownMenuItem(text = { Text(p) }, onClick = { onChange(p); open = false })
+            }
+            if (typed.isNotEmpty() && !exact) {
+                DropdownMenuItem(
+                    text = { Text("+ Add \"$typed\" as a new payee", color = MaterialTheme.colorScheme.primary) },
+                    onClick = { onChange(typed); open = false },
+                )
+            }
+        }
     }
 }

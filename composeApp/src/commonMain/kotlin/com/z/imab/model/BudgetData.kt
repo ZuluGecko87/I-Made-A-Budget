@@ -1,5 +1,8 @@
 package com.z.imab.model
 
+/** Payee the app gives the opening-balance transaction of an account. */
+const val STARTING_BALANCE_PAYEE = "Starting Balance"
+
 /** Immutable snapshot of everything in the budget. */
 data class BudgetData(
     val accounts: Map<String, Account> = emptyMap(),
@@ -86,6 +89,26 @@ data class BudgetData(
         isInternalTransfer(t) -> "Transfer"
         !isOnBudget(t.accountId) && t.categoryId == null -> "Tracking"
         else -> categoryName(t.categoryId)
+    }
+
+    /**
+     * Payees you've used, with how many transactions (and schedules) use each, most-used first.
+     * Entries the app makes itself (starting balances, loan principal) are left out.
+     */
+    val payees: List<Pair<String, Int>> by lazy {
+        val counts = HashMap<String, Int>()
+        (transactions.values.filter { it.loanPaymentOf == null }.map { it.payee } + scheduled.values.map { it.payee })
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it != STARTING_BALANCE_PAYEE }
+            .forEach { counts[it] = (counts[it] ?: 0) + 1 }
+        counts.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key.lowercase() })
+            .map { it.key to it.value }
+    }
+
+    /** Payees containing [query] (any case), most-used first. */
+    fun searchPayees(query: String, limit: Int = 8): List<String> {
+        val q = query.trim().lowercase()
+        return payees.asSequence().map { it.first }.filter { q.isEmpty() || it.lowercase().contains(q) }.take(limit).toList()
     }
 
     val uncategorizedCount: Int by lazy { transactions.values.count { needsCategory(it) } }
