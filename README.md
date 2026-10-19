@@ -80,6 +80,10 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 ./gradlew :composeApp:desktopTest -Pscreenshots   # also render screens to composeApp/build/screenshots
 ```
 
+The splash screen artwork and the app icons are drawn in code (`ui/Splash.kt`). After changing it,
+regenerate the icon files with `./gradlew :composeApp:desktopTest -Picons`, then rebuild
+`composeApp/icons/IMAB.icns` from `IMAB-1024.png` (sips + iconutil).
+
 To try the Mac app without touching your real budget, set `IMAB_DATA_DIR=/some/folder`.
 Real local data lives in `~/Library/Application Support/IMAB` on Mac and in app storage on Android.
 
@@ -98,4 +102,3 @@ composeApp/src/
 
 - Splitting one transaction across several categories.
 - Reports, goals/targets, and CSV import.
-- A custom Mac app icon (it uses the default one for now).

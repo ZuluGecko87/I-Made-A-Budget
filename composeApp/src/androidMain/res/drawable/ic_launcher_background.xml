@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Light blue tile behind the "i" mascot, matching the Mac icon. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:endColor="#6FAEE3"
+        android:startColor="#A9D3F5" />
+</shape>

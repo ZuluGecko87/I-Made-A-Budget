@@ -26,6 +26,8 @@ data class Settings(
     val deviceName: String = "",
     val syncId: String? = null,
     val syncName: String? = null,
+    /** "system", "light" or "dark". */
+    val theme: String = "system",
 )
 
 sealed interface SyncStatus {
@@ -126,6 +128,11 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
 
     private suspend fun saveSettings() =
         storage.writeLocal(SETTINGS_FILE, ImabJson.encodeToString(Settings.serializer(), _settings.value))
+
+    fun setTheme(theme: String) {
+        _settings.value = _settings.value.copy(theme = theme)
+        scope.launch { saveSettings() }
+    }
 
     fun setDeviceName(name: String) {
         _settings.value = _settings.value.copy(deviceName = name)

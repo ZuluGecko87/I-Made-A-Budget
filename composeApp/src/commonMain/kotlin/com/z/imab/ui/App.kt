@@ -14,7 +14,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -25,7 +24,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -87,49 +93,69 @@ class NavState {
 }
 
 @Composable
-fun App(store: BudgetStore, pickers: Pickers, nav: NavState) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors) {
+fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean = true) {
+    val settings by store.settings.collectAsState()
+    val dark = when (settings.theme) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
+    MaterialTheme(colorScheme = if (dark) DarkColors else LightColors) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             val loaded by store.loaded.collectAsState()
-            if (!loaded) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            } else {
-                BoxWithConstraints {
-                    val wide = maxWidth >= 720.dp
-                    if (wide) {
-                        Row(Modifier.fillMaxSize()) {
-                            NavigationRail(header = { RailHeader(store) }) {
-                                Screen.entries.forEach { s ->
-                                    NavigationRailItem(
-                                        selected = nav.screen == s,
-                                        onClick = { nav.go(s) },
-                                        icon = { Icon(s.icon, s.label) },
-                                        label = { Text(s.label) },
-                                    )
-                                }
-                            }
-                            VerticalDivider()
-                            Box(Modifier.weight(1f)) { Content(store, pickers, nav, wide = true) }
-                        }
-                    } else {
-                        Scaffold(
-                            bottomBar = {
-                                NavigationBar {
-                                    Screen.entries.forEach { s ->
-                                        NavigationBarItem(
-                                            selected = nav.screen == s,
-                                            onClick = { nav.go(s) },
-                                            icon = { Icon(s.icon, s.label) },
-                                            label = { Text(s.label, maxLines = 1) },
-                                        )
-                                    }
-                                }
-                            },
-                        ) { pad ->
-                            Box(Modifier.padding(pad)) { Content(store, pickers, nav, wide = false) }
-                        }
+            // The splash shows for a few seconds (tap to skip) and until the budget has loaded.
+            var splash by remember { mutableStateOf(showSplash) }
+            LaunchedEffect(Unit) {
+                delay(SPLASH_MILLIS)
+                splash = false
+            }
+            Box(Modifier.fillMaxSize()) {
+                if (loaded) MainLayout(store, pickers, nav)
+                AnimatedVisibility(visible = splash || !loaded, enter = fadeIn(), exit = fadeOut(tween(500))) {
+                    SplashScreen(onSkip = { splash = false })
+                }
+            }
+        }
+    }
+}
+
+private const val SPLASH_MILLIS = 3_000L
+
+@Composable
+private fun MainLayout(store: BudgetStore, pickers: Pickers, nav: NavState) {
+    BoxWithConstraints {
+        val wide = maxWidth >= 720.dp
+        if (wide) {
+            Row(Modifier.fillMaxSize()) {
+                NavigationRail(header = { RailHeader(store) }) {
+                    Screen.entries.forEach { s ->
+                        NavigationRailItem(
+                            selected = nav.screen == s,
+                            onClick = { nav.go(s) },
+                            icon = { Icon(s.icon, s.label) },
+                            label = { Text(s.label) },
+                        )
                     }
                 }
+                VerticalDivider()
+                Box(Modifier.weight(1f)) { Content(store, pickers, nav, wide = true) }
+            }
+        } else {
+            Scaffold(
+                bottomBar = {
+                    NavigationBar {
+                        Screen.entries.forEach { s ->
+                            NavigationBarItem(
+                                selected = nav.screen == s,
+                                onClick = { nav.go(s) },
+                                icon = { Icon(s.icon, s.label) },
+                                label = { Text(s.label, maxLines = 1) },
+                            )
+                        }
+                    }
+                },
+            ) { pad ->
+                Box(Modifier.padding(pad)) { Content(store, pickers, nav, wide = false) }
             }
         }
     }

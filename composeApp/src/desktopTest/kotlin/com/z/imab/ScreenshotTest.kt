@@ -20,6 +20,12 @@ import com.z.imab.ui.App
 import com.z.imab.ui.NavState
 import com.z.imab.ui.Screen
 import com.z.imab.ui.today
+import com.z.imab.ui.drawAppIcon
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -75,13 +81,17 @@ class ScreenshotTest {
 
         val nav = NavState()
         val out = File("build/screenshots").apply { mkdirs() }
-        fun shot(name: String, w: Int, h: Int) {
-            val scene = ImageComposeScene(w, h, Density(1.5f)) { App(store, NoPickers, nav) }
-            scene.render(0)
-            val img = scene.render(1_000_000_000)
+        fun shot(name: String, w: Int, h: Int, splash: Boolean = false) {
+            val scene = ImageComposeScene(w, h, Density(1.5f)) { App(store, NoPickers, nav, showSplash = splash) }
+            // Step through frames so animations (splash fade-in, money rain) actually run.
+            for (ms in 0L until 1_400L step 100L) scene.render(ms * 1_000_000)
+            val img = scene.render(1_400_000_000)
             File(out, "$name.png").writeBytes(img.encodeToData(EncodedImageFormat.PNG)!!.bytes)
             scene.close()
         }
+        store.setTheme("light")
+        shot("splash-phone", 620, 1300, splash = true)
+        shot("splash-wide", 1800, 1100, splash = true)
         shot("budget-wide", 1800, 1200)
         shot("budget-phone", 620, 1300)
         nav.openAccount("chk"); shot("register-wide", 1800, 1200)
@@ -89,6 +99,33 @@ class ScreenshotTest {
         nav.go(Screen.Accounts); shot("accounts-phone", 620, 1300)
         nav.go(Screen.Scheduled); shot("scheduled-wide", 1800, 1000)
         nav.go(Screen.Settings); shot("settings-wide", 1800, 1000)
+        store.setTheme("dark")
+        nav.go(Screen.Budget); shot("budget-dark-wide", 1800, 1200)
+        shot("splash-dark-phone", 620, 1300, splash = true)
         scope.cancel()
+    }
+
+    /**
+     * Regenerates the app icons from the same artwork as the splash screen
+     * (run with -Picons): composeApp/icons/IMAB-1024.png for the Mac .icns, and the Android
+     * adaptive icon foreground.
+     */
+    @Test
+    fun renderIcons() {
+        if (System.getProperty("imab.icons") == null) return
+        fun png(file: File, px: Int, content: @androidx.compose.runtime.Composable () -> Unit) {
+            val scene = ImageComposeScene(px, px, Density(1f), content = content)
+            file.parentFile.mkdirs()
+            file.writeBytes(scene.render().encodeToData(EncodedImageFormat.PNG)!!.bytes)
+            scene.close()
+        }
+        // macOS icons leave a transparent margin around the rounded tile.
+        png(File("icons/IMAB-1024.png"), 1024) {
+            Canvas(Modifier.fillMaxSize().padding(100.dp)) { drawAppIcon() }
+        }
+        // Android masks the adaptive foreground to the middle ~66%, so keep the art inside it.
+        png(File("src/androidMain/res/mipmap-xxxhdpi/ic_launcher_foreground.png"), 432) {
+            Canvas(Modifier.fillMaxSize().padding(88.dp)) { drawAppIcon(background = false) }
+        }
     }
 }

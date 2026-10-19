@@ -89,6 +89,23 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers) {
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Picker(
+                    "Theme",
+                    listOf(
+                        PickerOption("system", "Match system"),
+                        PickerOption("light", "Light"),
+                        PickerOption("dark", "Dark"),
+                    ),
+                    settings.theme,
+                    store::setTheme,
+                    Modifier.widthIn(max = 320.dp).fillMaxWidth(),
+                )
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("This device", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 OutlinedTextField(
                     deviceName, { deviceName = it },

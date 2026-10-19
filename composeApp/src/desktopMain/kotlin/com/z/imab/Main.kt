@@ -9,9 +9,19 @@ import androidx.compose.ui.window.rememberWindowState
 import com.z.imab.data.BudgetStore
 import com.z.imab.ui.App
 import com.z.imab.ui.NavState
+import com.z.imab.ui.drawAppIcon
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.painter.Painter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.runBlocking
+
+/** Window and Dock icon, drawn from the same artwork as the splash screen. */
+private object AppIconPainter : Painter() {
+    override val intrinsicSize = Size(512f, 512f)
+    override fun DrawScope.onDraw() = drawAppIcon()
+}
 
 fun main() = application {
     val store = remember { BudgetStore(DesktopStorage(), MainScope()) }
@@ -26,6 +36,7 @@ fun main() = application {
             exitApplication()
         },
         title = "IMAB — I Made A Budget",
+        icon = AppIconPainter,
         state = rememberWindowState(width = 1200.dp, height = 820.dp),
     ) {
         App(store, pickers, nav)

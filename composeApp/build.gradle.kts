@@ -83,6 +83,7 @@ compose.desktop {
             modules("java.naming", "jdk.unsupported")
             macOS {
                 bundleID = "com.z.imab"
+                iconFile.set(project.file("icons/IMAB.icns"))
                 appCategory = "public.app-category.finance"
             }
         }
@@ -91,4 +92,5 @@ compose.desktop {
 
 tasks.withType<Test>().configureEach {
     if (project.hasProperty("screenshots")) systemProperty("imab.screenshots", "1")
+    if (project.hasProperty("icons")) systemProperty("imab.icons", "1")
 }

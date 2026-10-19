@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Background shown while the app starts, before the animated splash takes over. -->
     <style name="Theme.IMAB" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowBackground">@color/splash_background</item>
     </style>
 </resources>
