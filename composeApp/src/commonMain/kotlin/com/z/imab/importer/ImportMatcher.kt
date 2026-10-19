@@ -93,7 +93,10 @@ object ImportMatcher {
 
             // Something entered by hand, from a schedule, or as the other leg of a transfer.
             existing
-                .filter { it.importId == null && it.id !in claimed && it.amount == src.amount && daysApart(it.date, src.date) <= window }
+                .filter {
+                    it.importId == null && it.id !in claimed && it.amount == src.amount &&
+                        it.payee != ImportWindow.STARTING_BALANCE_PAYEE && daysApart(it.date, src.date) <= window
+                }
                 .minByOrNull { daysApart(it.date, src.date) }
                 ?.let { match ->
                     claimed += match.id

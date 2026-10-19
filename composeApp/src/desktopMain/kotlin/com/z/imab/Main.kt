@@ -39,6 +39,7 @@ fun main() = application {
         icon = AppIconPainter,
         state = rememberWindowState(width = 1200.dp, height = 820.dp),
     ) {
+        LaunchedEffect(Unit) { installFileDrop(window, nav) }
         App(store, pickers, nav)
     }
 }

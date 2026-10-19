@@ -45,6 +45,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.z.imab.budget.BudgetMath
 import com.z.imab.budget.CardPayment
+import com.z.imab.budget.GoalMath
+import com.z.imab.budget.GoalStatus
 import com.z.imab.budget.CategoryMonth
 import com.z.imab.data.BudgetStore
 import com.z.imab.model.Category
@@ -59,6 +61,11 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
     var month by remember { mutableStateOf(YearMonth.of(today())) }
     val mb = remember(data, month) { BudgetMath.compute(data, month) }
     val prev = remember(data, month) { BudgetMath.compute(data, month - 1) }
+    val prev2 = remember(data, month) { BudgetMath.compute(data, month - 2) }
+    fun goalStatus(c: Category): GoalStatus? = c.goal?.let {
+        GoalMath.status(it, month, listOf(prev2.category(c.id), prev.category(c.id), mb.category(c.id)))
+    }
+    var editingGoal by remember { mutableStateOf<Category?>(null) }
 
     /** Category id and display name being assigned to (regular or credit card payment). */
     var assigning by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -137,6 +144,8 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         onAssign = { assigning = c.id to c.name },
                         onRename = { renamingCategory = c },
                         onDelete = { deleting = "Delete \"${c.name}\"? Its transactions become uncategorized." to { store.budget.deleteCategory(c.id) } },
+                        goal = goalStatus(c),
+                        onGoal = { editingGoal = c },
                     )
                 }
             }
@@ -156,8 +165,18 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             current = mb.category(id),
             lastMonth = prev.category(id),
             card = mb.cards.firstOrNull { it.categoryId == id },
+            goal = data.categories[id]?.let(::goalStatus),
             onDismiss = { assigning = null },
             onSave = { store.budget.setAssigned(month, id, it); assigning = null },
+        )
+    }
+    editingGoal?.let { c ->
+        GoalDialog(
+            category = c,
+            month = month,
+            history = listOf(prev2.category(c.id), prev.category(c.id), mb.category(c.id)),
+            onSave = { goal -> store.budget.saveCategory(c.copy(goal = goal)); editingGoal = null },
+            onDismiss = { editingGoal = null },
         )
     }
     paying?.let { t ->
@@ -268,13 +287,18 @@ private fun CategoryRow(
     onAssign: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    goal: GoalStatus?,
+    onGoal: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onAssign).padding(start = 16.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(category.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f).padding(end = 8.dp)) {
+            Text(category.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (goal != null) GoalProgress(goal, wide)
+        }
         Text(
             Money.format(cm.assigned),
             Modifier.width(if (wide) 120.dp else 90.dp),
@@ -289,6 +313,7 @@ private fun CategoryRow(
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Category options") }
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Assign money") }, onClick = { menu = false; onAssign() })
+                DropdownMenuItem(text = { Text(if (goal == null) "Set savings goal…" else "Edit savings goal…") }, onClick = { menu = false; onGoal() })
                 DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() })
                 DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })
             }
@@ -304,6 +329,7 @@ private fun AssignDialog(
     current: CategoryMonth,
     lastMonth: CategoryMonth,
     card: CardPayment?,
+    goal: GoalStatus? = null,
     onDismiss: () -> Unit,
     onSave: (Long) -> Unit,
 ) {
@@ -321,6 +347,9 @@ private fun AssignDialog(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                if (goal != null) {
+                    Text(goalHeadline(goal), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
                 if (current.creditOverspent > 0) {
                     Text(
                         "${Money.format(current.creditOverspent)} was charged to a credit card without money behind it. " +
@@ -333,6 +362,12 @@ private fun AssignDialog(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (current.available < 0) {
                         AssistChip(onClick = { text = Money.toInput(current.assigned - current.available) }, label = { Text("Cover overspending") })
+                    }
+                    if (goal != null && !goal.reached && goal.assignThisMonth > 0) {
+                        AssistChip(
+                            onClick = { text = Money.toInput(goal.assignThisMonth) },
+                            label = { Text("Goal: ${Money.format(goal.assignThisMonth)} this month") },
+                        )
                     }
                     if (card != null && card.underfunded > 0) {
                         AssistChip(

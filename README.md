@@ -15,8 +15,14 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
 - **Transfers** between accounts keep both sides in step. Transfers between two budget accounts
   don't need a category. A transfer to a tracking account takes one.
 - **Scheduled transactions** (once, weekly … yearly) are entered on their date automatically.
-- **Bank import** of QuickBooks `.qbo` files (`.qfx` and `.ofx` work too):
-  - already-imported transactions are marked **Duplicate** and skipped (by bank id, or by same date + amount + payee);
+- **Savings goals** on any category: a target amount, optionally a target date and/or a planned
+  monthly amount. The budget shows progress and either the monthly amount needed to hit the date or
+  an estimated finish month, both at your plan and at your actual pace over the last 3 months.
+- **Bank import** of QuickBooks `.qbo` files (`.qfx` and `.ofx` work too). On the Mac you can drag
+  the file onto an account's transactions to import into that account.
+  - the first import into an account asks how far back to go (the starting balance adjusts if the account was just created from the file);
+  - later imports only look from the last imported date on, unless you tick *Also check older transactions*;
+  - already-imported transactions are marked **Duplicate** and ignored (by bank id, or by same date + amount + payee), with a warning that lets you review them or import them anyway;
   - transactions you entered by hand, scheduled ones, and the other side of a transfer are **matched** within ±4 days instead of being added twice;
   - an upcoming scheduled transaction the bank already posted is matched and the schedule moves on;
   - new transactions get the category you last used for that payee;

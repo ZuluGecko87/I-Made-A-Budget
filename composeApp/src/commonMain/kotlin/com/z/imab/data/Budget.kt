@@ -4,6 +4,7 @@ import com.z.imab.budget.Scheduler
 import com.z.imab.importer.ImportAction
 import com.z.imab.importer.ImportMatcher
 import com.z.imab.importer.ImportRow
+import com.z.imab.importer.ImportWindow
 import com.z.imab.model.Account
 import com.z.imab.model.Assignment
 import com.z.imab.model.BudgetData
@@ -186,24 +187,39 @@ class Budget(
         val isNew = !d.accounts.containsKey(account.id)
         put(Kinds.ACCOUNT, account.id, account, Account.serializer())
         if (isNew && startingBalance != 0L && startDate != null) {
-            putTxn(
-                Transaction(
-                    id = newId(),
-                    accountId = account.id,
-                    date = startDate,
-                    amount = startingBalance,
-                    payee = "Starting Balance",
-                    categoryId = when {
-                        !account.onBudget -> null
-                        account.type.isCredit && startingBalance < 0 -> PREEXISTING_DEBT
-                        else -> READY_TO_ASSIGN
-                    },
-                    cleared = true,
-                )
-            )
+            putTxn(startingBalanceTxn(newId(), account, startingBalance, startDate))
         }
         account.id
     }
+
+    /**
+     * Sets an account's starting balance (creating, moving or removing the "Starting Balance"
+     * transaction). Used when the start date of a first import changes.
+     */
+    fun setStartingBalance(accountId: String, amount: Long, date: LocalDate) = edit {
+        val account = d.accounts[accountId] ?: return@edit
+        val existing = d.transactions.values.firstOrNull {
+            it.accountId == accountId && it.payee == ImportWindow.STARTING_BALANCE_PAYEE && it.importId == null
+        }
+        when {
+            amount == 0L -> existing?.let { removeTxn(it.id) }
+            else -> putTxn(startingBalanceTxn(existing?.id ?: newId(), account, amount, date))
+        }
+    }
+
+    private fun startingBalanceTxn(id: String, account: Account, amount: Long, date: LocalDate) = Transaction(
+        id = id,
+        accountId = account.id,
+        date = date,
+        amount = amount,
+        payee = ImportWindow.STARTING_BALANCE_PAYEE,
+        categoryId = when {
+            !account.onBudget -> null
+            account.type.isCredit && amount < 0 -> PREEXISTING_DEBT
+            else -> READY_TO_ASSIGN
+        },
+        cleared = true,
+    )
 
     fun deleteAccount(id: String) = edit {
         d.transactions.values.filter { it.accountId == id }.map { it.id }.forEach { removeTxn(it, removePair = false) }

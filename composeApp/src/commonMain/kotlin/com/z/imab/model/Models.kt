@@ -59,6 +59,15 @@ data class Category(
     val groupId: String,
     val name: String,
     val sortOrder: Int = 0,
+    val goal: SavingsGoal? = null,
+)
+
+/** Save up to [target] in a category, optionally by [targetDate] and/or with a planned [monthly] amount. */
+@Serializable
+data class SavingsGoal(
+    val target: Long,
+    val targetDate: LocalDate? = null,
+    val monthly: Long? = null,
 )
 
 /** Amounts are in cents. Negative = outflow, positive = inflow. */

@@ -79,6 +79,8 @@ class DesktopPickers : Pickers {
         ?: cloudRoot?.listFiles()?.firstOrNull { it.isDirectory }
         ?: home
 
+    override val supportsFileDrop = true
+
     override val syncHint: String =
         "On a Mac, OneDrive, Google Drive and Dropbox appear in the sidebar of the file dialog (or under ~/Library/CloudStorage)."
 

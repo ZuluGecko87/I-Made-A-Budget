@@ -37,4 +37,7 @@ interface Pickers {
 
     /** Short platform-specific hint on how to reach OneDrive / Google Drive / Dropbox in the picker. */
     val syncHint: String
+
+    /** Whether bank files can be dragged onto the window (desktop). */
+    val supportsFileDrop: Boolean get() = false
 }

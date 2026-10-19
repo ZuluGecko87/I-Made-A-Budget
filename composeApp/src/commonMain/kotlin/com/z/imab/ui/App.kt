@@ -25,6 +25,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.z.imab.platform.PickedFile
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -63,6 +69,15 @@ class NavState {
     var accountId by mutableStateOf<String?>(null)
     var importAccountId by mutableStateOf<String?>(null)
 
+    /** A bank file dropped onto the window, waiting for the Import screen to pick it up. */
+    var pendingImport by mutableStateOf<PickedFile?>(null)
+
+    /** True while a file is being dragged over the window. */
+    var dragging by mutableStateOf(false)
+
+    /** Shown briefly when something other than a bank file is dropped. */
+    var dropError by mutableStateOf<String?>(null)
+
     fun go(s: Screen) {
         screen = s
         accountId = null
@@ -76,6 +91,17 @@ class NavState {
     fun importInto(accountId: String?) {
         importAccountId = accountId
         screen = Screen.Import
+    }
+
+    /** The account a dropped file should go into: the one whose transactions are on screen. */
+    val dropAccountId: String? get() = accountId?.takeIf { screen == Screen.Accounts && it != UNCATEGORIZED_VIEW }
+
+    /** Opens the Import screen with a dropped file, aimed at the account currently shown. */
+    fun importFile(file: PickedFile) {
+        importAccountId = dropAccountId
+        pendingImport = file
+        screen = Screen.Import
+        accountId = null
     }
 
     /** Returns false when there's nowhere to go back to (the app should close). */
@@ -110,7 +136,18 @@ fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean
                 splash = false
             }
             Box(Modifier.fillMaxSize()) {
-                if (loaded) MainLayout(store, pickers, nav)
+                if (loaded) {
+                    MainLayout(store, pickers, nav)
+                    if (nav.dragging) DropOverlay(store, nav)
+                    nav.dropError?.let { message ->
+                        AlertDialog(
+                            onDismissRequest = { nav.dropError = null },
+                            title = { Text("Can't import that file") },
+                            text = { Text(message) },
+                            confirmButton = { TextButton(onClick = { nav.dropError = null }) { Text("OK") } },
+                        )
+                    }
+                }
                 AnimatedVisibility(visible = splash || !loaded, enter = fadeIn(), exit = fadeOut(tween(500))) {
                     SplashScreen(onSkip = { splash = false })
                 }
@@ -120,6 +157,27 @@ fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean
 }
 
 private const val SPLASH_MILLIS = 3_000L
+
+@Composable
+private fun DropOverlay(store: BudgetStore, nav: NavState) {
+    val data by store.data.collectAsState()
+    val target = nav.dropAccountId?.let { data.accountName(it) }
+    Box(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)).padding(24.dp)
+            .border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                if (target != null) "Drop to import into $target" else "Drop to import bank file",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(".qbo, .qfx or .ofx — you'll review everything before it's added", color = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+    }
+}
 
 @Composable
 private fun MainLayout(store: BudgetStore, pickers: Pickers, nav: NavState) {
@@ -180,7 +238,7 @@ private fun Content(store: BudgetStore, pickers: Pickers, nav: NavState, wide: B
         Screen.Budget -> BudgetScreen(store, nav, wide)
         Screen.Accounts -> {
             val id = nav.accountId
-            if (id == null) AccountsScreen(store, nav) else RegisterScreen(store, nav, id, wide)
+            if (id == null) AccountsScreen(store, nav) else RegisterScreen(store, nav, id, wide, pickers.supportsFileDrop)
         }
         Screen.Scheduled -> ScheduledScreen(store, wide)
         Screen.Import -> ImportScreen(store, pickers, nav)

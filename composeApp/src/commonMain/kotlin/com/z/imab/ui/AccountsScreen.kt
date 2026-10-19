@@ -125,7 +125,7 @@ private fun AccountRow(a: Account, data: BudgetData, onClick: () -> Unit) {
 }
 
 @Composable
-fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: Boolean) {
+fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: Boolean, fileDrop: Boolean = false) {
     val data by store.data.collectAsState()
     val uncategorizedView = accountId == UNCATEGORIZED_VIEW
     val account = data.accounts[accountId]
@@ -181,6 +181,14 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     }
                 }
                 OutlinedButton(onClick = { nav.importInto(accountId) }) { Text("Import bank file") }
+            }
+            if (fileDrop) {
+                Text(
+                    "Tip: drag a .qbo, .qfx or .ofx file onto this window to import it into ${account!!.name}.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                )
             }
             cardInfo?.let { c ->
                 Text(

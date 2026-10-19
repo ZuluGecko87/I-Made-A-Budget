@@ -77,6 +77,12 @@ class ScreenshotTest {
         b.setAssigned(month, "seed-groceries", 60000)
         b.setAssigned(month, "seed-rent-mortgage", 150000)
         b.setAssigned(month, "seed-dining-out", 3000)
+        // Savings goals: one with a planned monthly amount, one with a target date.
+        b.saveCategory(b.data.categories.getValue("seed-emergency-fund").copy(goal = com.z.imab.model.SavingsGoal(500000, monthly = 25000)))
+        b.setAssigned(month - 1, "seed-emergency-fund", 50000)
+        b.setAssigned(month, "seed-emergency-fund", 25000)
+        b.saveCategory(b.data.categories.getValue("seed-vacation").copy(goal = com.z.imab.model.SavingsGoal(200000, targetDate = month.plus(9).firstDay)))
+        b.setAssigned(month, "seed-vacation", 10000)
         b.saveScheduled(ScheduledTransaction("r", "chk", month.lastDay, month.lastDay, Frequency.MONTHLY, -150000, "Landlord", categoryId = "seed-rent-mortgage"))
 
         val nav = NavState()
@@ -99,6 +105,15 @@ class ScreenshotTest {
         nav.go(Screen.Accounts); shot("accounts-phone", 620, 1300)
         nav.go(Screen.Scheduled); shot("scheduled-wide", 1800, 1000)
         nav.go(Screen.Settings); shot("settings-wide", 1800, 1000)
+        nav.go(Screen.Budget); shot("budget-goals-wide", 1800, 2700)
+
+        // Dropping a bank file on Everyday Checking: first import into it.
+        val qbo = PickedFile("Checking_Oct.qbo", Samples.QBO_CHECKING)
+        nav.openAccount("chk"); nav.importFile(qbo); shot("import-first-wide", 1800, 1500)
+        // Import it, then drop the same file again: only since the last import, with a duplicate alert.
+        val stmt = com.z.imab.importer.OfxParser.parse(Samples.QBO_CHECKING).single()
+        b.applyImport("chk", stmt.accountKey, com.z.imab.importer.ImportMatcher.analyze(stmt.transactions, "chk", b.data))
+        nav.openAccount("chk"); nav.importFile(qbo); shot("import-again-wide", 1800, 1100)
         store.setTheme("dark")
         nav.go(Screen.Budget); shot("budget-dark-wide", 1800, 1200)
         shot("splash-dark-phone", 620, 1300, splash = true)
