@@ -608,15 +608,15 @@ private fun CardPaymentRow(
             Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val status = when {
                 card.owed <= 0 -> "Paid off"
-                card.underfunded == 0L -> if (wide) "Owe ${Money.format(card.owed)} · fully funded" else "Fully funded"
+                card.underfunded == 0L -> "Owe ${Money.format(card.owed)} · ${if (wide) "fully funded" else "covered"}"
                 wide -> "Owe ${Money.format(card.owed)} · ${Money.format(card.underfunded)} not covered"
-                else -> "${Money.format(card.underfunded)} not covered"
+                else -> "Owe ${Money.format(card.owed)} · ${Money.format(card.underfunded)} short"
             }
             Text(
                 status,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (card.underfunded > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = if (wide) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }

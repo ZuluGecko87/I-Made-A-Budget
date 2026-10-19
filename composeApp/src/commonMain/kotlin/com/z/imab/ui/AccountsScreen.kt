@@ -150,7 +150,15 @@ private fun AccountRow(a: Account, data: BudgetData, possibleDuplicates: Int, on
             }
         }
         val bal = data.balance(a.id)
-        Text(Money.format(bal), color = amountColor(bal), fontWeight = FontWeight.SemiBold)
+        // Cards and loans read as what you owe.
+        if ((a.type.isCredit || a.type.isLoan) && bal < 0) {
+            Column(horizontalAlignment = Alignment.End) {
+                Text(Money.format(-bal), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                Text("owed", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            Text(Money.format(bal), color = amountColor(bal), fontWeight = FontWeight.SemiBold)
+        }
         if (!a.closed) {
             IconButton(onClick = onAdd) { Icon(Icons.Default.Add, "Add transaction to ${a.name}", tint = MaterialTheme.colorScheme.primary) }
         }
@@ -207,9 +215,18 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
         }
         if (!uncategorizedView) {
             FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Balance("Cleared", data.clearedBalance(accountId))
-                Balance("Uncleared", data.balance(accountId) - data.clearedBalance(accountId))
-                Balance("Working balance", data.balance(accountId))
+                val total = data.balance(accountId)
+                val cleared = data.clearedBalance(accountId)
+                if (account!!.type.isCredit || account.type.isLoan) {
+                    // Lead with what's owed, including charges that haven't cleared yet.
+                    OwedBalance(if (total < 0) "Owed" else "Credit balance", total)
+                    Balance("Cleared", cleared)
+                    Balance("Pending (not cleared)", total - cleared)
+                } else {
+                    Balance("Cleared", cleared)
+                    Balance("Uncleared", total - cleared)
+                    Balance("Working balance", total)
+                }
             }
             FlowRow(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { adding = true }) { Icon(Icons.Default.Add, null); Text("Add transaction") }
@@ -320,6 +337,20 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             onDelete = { store.budget.deleteAccount(account.id); editingAccount = false; nav.accountId = null },
             onDismiss = { editingAccount = false },
         )
+    }
+}
+
+/** Owed amount shown as a positive number, larger, in the debt color. */
+@Composable
+private fun OwedBalance(label: String, balance: Long) {
+    Column {
+        Text(
+            Money.format(kotlin.math.abs(balance)),
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleLarge,
+            color = if (balance < 0) MaterialTheme.colorScheme.error else amountColor(balance),
+        )
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

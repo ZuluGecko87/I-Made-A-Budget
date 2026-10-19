@@ -217,6 +217,30 @@ class CreditCardTest {
     }
 
     @Test
+    fun chargesRaiseWhatIsOwedUntilAPaymentBringsItDown() {
+        // The user's case: $5,000 existing debt with $5,000 set aside, then a $150 insurance charge.
+        val b = Budget("dev") { now++ }.also { it.seedDefaults() }
+        b.saveAccount(Account("chk", "Checking"), 1_000_000, LocalDate(2026, 9, 30))
+        b.saveAccount(Account("visa", "Visa", AccountType.CREDIT_CARD), -500000, LocalDate(2026, 10, 19))
+        b.setAssigned(oct, visaPay, 500000)
+        b.setAssigned(oct, "seed-insurance", 15000)
+        b.saveTransaction(Transaction("sf", "visa", LocalDate(2026, 10, 19), -15000, "State Farm", categoryId = "seed-insurance"))
+
+        var m = b.month(oct)
+        assertEquals(-515000L, b.data.balance("visa"), "the charge adds to the card's debt")
+        assertEquals(515000L, m.cards.single().owed)
+        assertEquals(515000L, m.category(visaPay).available, "and the insurance money is set aside to pay it")
+        assertEquals(0L, m.category("seed-insurance").available)
+
+        b.payCard("pay", 25, 515000)
+        m = b.month(oct)
+        assertEquals(0L, b.data.balance("visa"))
+        assertEquals(0L, m.category(visaPay).available)
+        assertEquals(1_000_000L - 515000L, b.data.balance("chk"))
+        assertBalanced(b, oct)
+    }
+
+    @Test
     fun trackingCardHasNoPaymentCategory() {
         val b = setup()
         b.saveAccount(Account("store", "Store card", AccountType.CREDIT_CARD, onBudget = false))
