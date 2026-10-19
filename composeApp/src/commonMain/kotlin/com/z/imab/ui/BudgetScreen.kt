@@ -37,6 +37,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
@@ -82,6 +84,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
     var showingActivity by remember { mutableStateOf<Category?>(null) }
     /** Category whose available amount was clicked, to cover overspending or move money. */
     var moving by remember { mutableStateOf<String?>(null) }
+    var lastMove by remember { mutableStateOf<Move?>(null) }
     var editingTxn by remember { mutableStateOf<Transaction?>(null) }
 
     /**
@@ -167,6 +170,24 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             }
         }
 
+        lastMove?.let { m ->
+            fun name(id: String?) = if (id == null) "Ready to Assign" else data.categoryName(id)
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Moved ${Money.format(m.amount)} from ${name(m.from)} to ${name(m.to)} (${m.month.label})",
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    TextButton(onClick = { store.budget.moveMoney(m.month, m.to, m.from, m.amount); lastMove = null }) { Text("Undo") }
+                    TextButton(onClick = { lastMove = null }) { Text("OK") }
+                }
+            }
+        }
         BudgetHeaderRow(wide)
         LazyColumn(Modifier.weight(1f)) {
             if (mb.cards.isNotEmpty()) {
@@ -244,9 +265,14 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
         MoveMoneyDialog(
             data = data,
             mb = mb,
+            month = month,
             categoryId = id,
             free = BudgetMath.freeToAssign(data, month, YearMonth.of(today())),
-            onMove = { from, to, amount -> store.budget.moveMoney(month, from, to, amount); moving = null },
+            onMove = { from, to, amount ->
+                store.budget.moveMoney(month, from, to, amount)
+                lastMove = Move(month, from, to, amount)
+                moving = null
+            },
             onDismiss = { moving = null },
         )
     }
@@ -694,62 +720,72 @@ private fun ActivityDialog(
     )
 }
 
+/** A completed move, so it can be undone. */
+private data class Move(val month: YearMonth, val from: String?, val to: String?, val amount: Long)
+
 /**
- * Clicking an available amount: when it's negative, cover the overspending from Ready to Assign
- * or another category; otherwise move money from it to another category or back to Ready to Assign.
+ * Clicking an available amount: move money between any two categories (or Ready to Assign) in
+ * the month being viewed. A category with nothing available (or overspent) is filled in as where
+ * the money goes; one with money as where it comes from. Either side can be changed or swapped.
  */
 @Composable
 private fun MoveMoneyDialog(
     data: BudgetData,
     mb: MonthBudget,
+    month: YearMonth,
     categoryId: String,
     free: Long,
     onMove: (from: String?, to: String?, amount: Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val cm = mb.category(categoryId)
-    val name = data.categoryName(categoryId)
-    val covering = cm.available < 0
-    val others = mb.categories.filterKeys { it != categoryId && (it in data.categories || it.startsWith(com.z.imab.model.CC_PAYMENT_PREFIX)) }
-    // Where money can come from (covering) or go to (moving). null = Ready to Assign.
-    val choices: List<PickerOption<String?>> = buildList {
-        add(PickerOption(null, "Ready to Assign — ${Money.format(free)}"))
-        val ordered = data.sortedGroups.flatMap { data.categoriesIn(it.id) }.map { it.id } + mb.cards.map { it.categoryId }
-        ordered.filter { it in others && (!covering || others.getValue(it).available > 0) }.forEach {
-            add(PickerOption(it, "${data.categoryName(it)} — ${Money.format(others.getValue(it).available)}"))
-        }
-    }
-    val needed = if (covering) -cm.available else cm.available
-    var other by remember {
+    val receiving = cm.available <= 0
+    val ids = data.sortedGroups.flatMap { data.categoriesIn(it.id) }.map { it.id } + mb.cards.map { it.categoryId }
+    fun has(id: String?): Long = if (id == null) free else mb.category(id).available
+    fun label(id: String?): String = if (id == null) "Ready to Assign" else data.categoryName(id)
+    val needed = if (cm.available < 0) -cm.available else 0L
+
+    var from by remember {
         mutableStateOf(
-            if (!covering || free >= needed) null
-            else others.filterValues { it.available > 0 }.maxByOrNull { it.value.available }?.key
+            if (!receiving) categoryId
+            else if (free > 0 && free >= needed) null
+            else ids.filter { it != categoryId && has(it) > 0 }.maxByOrNull { has(it) }
         )
     }
-    var text by remember { mutableStateOf(Money.toInput(needed)) }
+    var to by remember { mutableStateOf<String?>(if (receiving) categoryId else null) }
+    var text by remember { mutableStateOf(if (receiving) (if (needed > 0) Money.toInput(needed) else "") else Money.toInput(cm.available)) }
+    var submitted by remember { mutableStateOf(false) }
     val amount = Money.parse(text)
-    val sourceHas = when {
-        !covering -> cm.available
-        other == null -> free
-        else -> others[other]?.available ?: 0
-    }
-    val valid = amount != null && amount > 0 && amount <= sourceHas
+    val options = listOf(PickerOption<String?>(null, "Ready to Assign — ${Money.format(free)}")) +
+        ids.map { PickerOption<String?>(it, "${data.categoryName(it)} — ${Money.format(has(it))}") }
+    val valid = from != to && amount != null && amount > 0 && amount <= has(from)
+    val current = YearMonth.of(today())
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (covering) "Cover overspending" else "Move money") },
+        title = { Text("${if (cm.available < 0) "Cover overspending" else "Move money"} · ${month.label}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    if (covering) "$name is ${Money.format(needed)} overspent. Choose where the money comes from."
-                    else "$name has ${Money.format(cm.available)} available. Choose where to move it.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Picker(if (covering) "Take money from" else "Move to", choices, other, { other = it }, Modifier.fillMaxWidth())
-                MoneyField("Amount", text, { text = it }, Modifier.fillMaxWidth(), isError = text.isNotBlank() && !valid)
-                if (amount != null && amount > sourceHas) {
+                if (cm.available < 0) {
+                    Text("${data.categoryName(categoryId)} is ${Money.format(needed)} overspent.", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (month != current) {
                     Text(
-                        "${if (covering) data.categoryName(other).takeIf { other != null } ?: "Ready to Assign" else name} only has ${Money.format(maxOf(0, sourceHas))}.",
+                        "This changes the budget for ${month.label}, not ${current.label}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+                Picker("From", options, from, { from = it }, Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    TextButton(onClick = { val f = from; from = to; to = f }) { Text("⇅ Swap") }
+                }
+                Picker("To", options, to, { to = it }, Modifier.fillMaxWidth())
+                MoneyField("Amount", text, { text = it }, Modifier.fillMaxWidth(), isError = text.isNotBlank() && !valid)
+                when {
+                    from == to -> Text("Choose two different places.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    amount != null && amount > has(from) -> Text(
+                        "${label(from)} only has ${Money.format(maxOf(0, has(from)))}.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -757,10 +793,11 @@ private fun MoveMoneyDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = {
+            TextButton(enabled = valid && !submitted, onClick = {
                 val a = amount ?: return@TextButton
-                if (covering) onMove(other, categoryId, a) else onMove(categoryId, other, a)
-            }) { Text(if (covering) "Cover" else "Move") }
+                submitted = true
+                onMove(from, to, a)
+            }) { Text("Move") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

@@ -26,8 +26,9 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   - *Across categories*: one savings target for several categories together (e.g. House over Down
     Payment + Closing Costs), with the monthly amount needed and an estimated finish.
   - The **Goals** tab lists them all and is where you add them; Import is on the Accounts page.
-- **Click an Available amount** to move money: when it's negative (overspent), cover it from Ready
-  to Assign or any category with money; otherwise move it to another category or back to Ready to Assign.
+- **Click an Available amount** to move money between any two categories (or Ready to Assign) in
+  the month you're viewing, with From and To you can change or swap. An empty or overspent
+  category is filled in as where the money goes. Each move can be undone right after.
 - **You can't assign more than you have**: assigning is capped at what's in Ready to Assign
   (lowering an amount is always allowed).
 - On a phone each category shows what was spent under its name; tap it (or *Show activity* in the
