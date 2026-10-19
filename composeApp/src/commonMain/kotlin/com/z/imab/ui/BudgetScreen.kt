@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -192,8 +195,14 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             card = mb.cards.firstOrNull { it.categoryId == id },
             goal = data.categories[id]?.let(::goalStatus),
             maxAssignable = BudgetMath.maxAssignable(data, month, YearMonth.of(today()), id),
+            // Regular categories can be renamed right here; card payment categories are named after the card.
+            renameable = data.categories.containsKey(id),
             onDismiss = { assigning = null },
-            onSave = { store.budget.setAssigned(month, id, it); assigning = null },
+            onSave = { amount, newName ->
+                data.categories[id]?.let { c -> if (newName.isNotBlank() && newName != c.name) store.budget.saveCategory(c.copy(name = newName)) }
+                if (amount != mb.category(id).assigned) store.budget.setAssigned(month, id, amount)
+                assigning = null
+            },
         )
     }
     if (fundingGoals) {
@@ -369,11 +378,14 @@ private fun CategoryRow(
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onAssign).padding(start = 16.dp, top = 2.dp, bottom = 2.dp),
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clickable(onClick = onAssign).padding(start = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Tapping the name edits the category; tapping the numbers assigns money.
-        Column(Modifier.weight(1f).padding(end = 8.dp).clickable(onClick = onRename)) {
+        // Tapping the name side edits the category (the whole height of the row); tapping the numbers assigns money.
+        Column(
+            Modifier.weight(1f).fillMaxHeight().clickable(onClick = onRename).padding(end = 8.dp, top = 2.dp, bottom = 2.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
             Text(category.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (goal != null) GoalProgress(goal, wide)
         }
@@ -444,18 +456,23 @@ private fun AssignDialog(
     card: CardPayment?,
     goal: GoalStatus? = null,
     maxAssignable: Long,
+    renameable: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (Long) -> Unit,
+    onSave: (amount: Long, name: String) -> Unit,
 ) {
     var text by remember { mutableStateOf(if (current.assigned == 0L) "" else Money.toInput(current.assigned)) }
+    var newName by remember { mutableStateOf(name) }
     val parsed = if (text.isBlank()) 0L else Money.parse(text)
     // You can always lower an amount; raising it can't use more than Ready to Assign has.
     val tooMuch = parsed != null && parsed > current.assigned && parsed > maxAssignable
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("$name · ${month.label}") },
+        title = { Text(if (renameable) month.label else "$name · ${month.label}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (renameable) {
+                    OutlinedTextField(newName, { newName = it }, label = { Text("Category name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
                 Text("Activity ${Money.format(current.activity)} · Available ${Money.format(current.available)}", style = MaterialTheme.typography.bodySmall)
                 if (card != null) {
                     Text(
@@ -502,7 +519,12 @@ private fun AssignDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { parsed?.let(onSave) }, enabled = parsed != null && !tooMuch) { Text("Assign") } },
+        confirmButton = {
+            TextButton(
+                onClick = { parsed?.let { onSave(it, newName.trim()) } },
+                enabled = parsed != null && !tooMuch && newName.isNotBlank(),
+            ) { Text("Save") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
