@@ -271,19 +271,30 @@ fun AccountDialog(
     suggestedType: AccountType = AccountType.CHECKING,
     suggestedBalance: Long = 0,
     suggestedDate: LocalDate = today(),
+    /** Current balance of [initial]; lets a loan's principal be corrected when editing. */
+    currentBalance: Long = 0,
     onSave: (Account, Long, LocalDate) -> Unit,
     onDelete: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(initial?.name ?: suggestedName) }
     var type by remember { mutableStateOf(initial?.type ?: suggestedType) }
-    var onBudget by remember { mutableStateOf(initial?.onBudget ?: (suggestedType !in setOf(AccountType.LOAN, AccountType.INVESTMENT))) }
+    var onBudget by remember { mutableStateOf(initial?.onBudget ?: (suggestedType != AccountType.INVESTMENT)) }
     var closed by remember { mutableStateOf(initial?.closed ?: false) }
-    var balanceText by remember { mutableStateOf(if (suggestedBalance == 0L) "" else Money.toInput(suggestedBalance)) }
+    val isLoan = type.isLoan
+    val startBalance = if (initial != null) currentBalance else suggestedBalance
+    // Loans are entered as the positive principal remaining and stored as debt.
+    var balanceText by remember {
+        mutableStateOf(
+            when {
+                startBalance == 0L -> ""
+                (initial?.type ?: suggestedType).isLoan -> Money.toInput(kotlin.math.abs(startBalance))
+                else -> Money.toInput(startBalance)
+            }
+        )
+    }
     var startDate by remember { mutableStateOf(suggestedDate) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val isLoan = type == AccountType.LOAN
-    // Loans are entered as the positive principal remaining and stored as debt.
     val balance = (if (balanceText.isBlank()) 0L else Money.parse(balanceText))?.let { if (isLoan) -kotlin.math.abs(it) else it }
     var rateText by remember { mutableStateOf(initial?.loan?.annualRatePct?.toString().orEmpty()) }
     var escrowText by remember { mutableStateOf(initial?.loan?.monthlyEscrow?.takeIf { it > 0 }?.let(Money::toInput).orEmpty()) }
@@ -300,31 +311,49 @@ fun AccountDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Picker("Type", AccountType.entries.map { PickerOption(it, it.label) }, type, { type = it }, Modifier.fillMaxWidth())
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(onBudget, { onBudget = it })
-                    Column {
-                        Text("Budget account")
-                        Text("Off = tracking only (loans, investments)", style = MaterialTheme.typography.bodySmall)
+                Picker("Type", AccountType.entries.map { PickerOption(it, it.label) }, type, {
+                    // Pick a sensible default when the type changes; investments are usually tracked.
+                    if (it == AccountType.INVESTMENT) onBudget = false
+                    if (type == AccountType.INVESTMENT && it != AccountType.INVESTMENT) onBudget = true
+                    type = it
+                }, Modifier.fillMaxWidth())
+                if (isLoan) {
+                    Text(
+                        "Loans are tracked outside the budget, so what you owe doesn't reduce Ready to Assign. " +
+                            "Budget the payments you make from checking (e.g. in a Mortgage category) and link them to this loan.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(onBudget, { onBudget = it })
+                        Column {
+                            Text("Budget account")
+                            Text("Off = tracking only (e.g. investments)", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
-                if (initial == null) {
+                if (initial == null || isLoan) {
                     MoneyField(
-                        if (isLoan) "Principal remaining" else "Current balance (negative for debt)",
+                        when {
+                            isLoan && initial != null -> "Principal remaining today"
+                            isLoan -> "Principal remaining"
+                            else -> "Current balance (negative for debt)"
+                        },
                         balanceText, { balanceText = it }, Modifier.fillMaxWidth(), isError = balance == null,
                     )
-                    DateField("Balance as of", startDate, { startDate = it }, Modifier.fillMaxWidth())
+                    if (initial == null) DateField("Balance as of", startDate, { startDate = it }, Modifier.fillMaxWidth())
                 }
                 if (isLoan) {
                     Text("Loan details", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Used to split each payment into interest, escrow and principal. Link payments from the transaction, " +
-                            "or with a rule when importing.",
+                        "Used to split each payment into interest, escrow and principal.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     OutlinedTextField(
                         rateText, { rateText = it },
                         label = { Text("Interest rate (% per year)") },
+                        placeholder = { Text("e.g. 6.25") },
                         singleLine = true,
                         isError = rateText.isNotBlank() && rate == null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -333,7 +362,7 @@ fun AccountDialog(
                     MoneyField("Monthly escrow (taxes & insurance)", escrowText, { escrowText = it }, Modifier.fillMaxWidth(), isError = escrow == null)
                     MoneyField("Usual monthly payment incl. escrow (optional)", paymentText, { paymentText = it }, Modifier.fillMaxWidth(), isError = paymentText.isNotBlank() && payment == null)
                     if (initial?.loan != null) {
-                        Text("Changes apply to payments from this month on.", style = MaterialTheme.typography.bodySmall)
+                        Text("Changes to the rate or escrow apply to payments from this month on.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 if (initial != null) {
@@ -347,7 +376,7 @@ fun AccountDialog(
         confirmButton = {
             TextButton(enabled = name.isNotBlank() && balance != null && loanValid, onClick = {
                 val a = (initial ?: Account(newId(), name)).copy(
-                    name = name.trim(), type = type, onBudget = onBudget, closed = closed,
+                    name = name.trim(), type = type, onBudget = onBudget && !isLoan, closed = closed,
                     loan = if (isLoan) loanTerms else null,
                 )
                 onSave(a, balance ?: 0, startDate)
@@ -375,7 +404,7 @@ fun AccountDialog(
  * that's less, or null if there's no other account to pay from. Open it in [TransactionDialog] so the account and amount can be changed before saving.
  */
 fun paymentTemplate(data: BudgetData, cardId: String, amount: Long, id: String): Transaction? {
-    val from = data.sortedAccounts.firstOrNull { it.onBudget && !it.closed && !it.type.isCredit }
+    val from = data.sortedAccounts.firstOrNull { it.inBudget && !it.closed && !it.type.isCredit }
         ?: data.sortedAccounts.firstOrNull { it.id != cardId }
         ?: return null
     val owed = maxOf(0, -data.balance(cardId))

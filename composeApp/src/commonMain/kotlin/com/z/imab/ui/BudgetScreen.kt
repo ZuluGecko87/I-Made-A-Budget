@@ -30,6 +30,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -272,9 +274,17 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
         }
     }
     renamingCategory?.let { c ->
-        TextInputDialog("Rename category", initial = c.name, onDismiss = { renamingCategory = null }) {
-            store.budget.saveCategory(c.copy(name = it)); renamingCategory = null
-        }
+        EditCategoryDialog(
+            category = c,
+            groups = data.sortedGroups,
+            onSave = { store.budget.saveCategory(it); renamingCategory = null },
+            onGoal = { renamingCategory = null; editingGoal = c },
+            onDelete = {
+                renamingCategory = null
+                deleting = "Delete \"${c.name}\"? Its transactions become uncategorized." to { store.budget.deleteCategory(c.id) }
+            },
+            onDismiss = { renamingCategory = null },
+        )
     }
     renamingGroup?.let { g ->
         TextInputDialog("Rename group", initial = g.name, onDismiss = { renamingGroup = null }) {
@@ -362,7 +372,8 @@ private fun CategoryRow(
         Modifier.fillMaxWidth().clickable(onClick = onAssign).padding(start = 16.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f).padding(end = 8.dp)) {
+        // Tapping the name edits the category; tapping the numbers assigns money.
+        Column(Modifier.weight(1f).padding(end = 8.dp).clickable(onClick = onRename)) {
             Text(category.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (goal != null) GoalProgress(goal, wide)
         }
@@ -381,12 +392,47 @@ private fun CategoryRow(
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Assign money") }, onClick = { menu = false; onAssign() })
                 DropdownMenuItem(text = { Text(if (goal == null) "Set goal…" else "Edit goal…") }, onClick = { menu = false; onGoal() })
-                DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() })
+                DropdownMenuItem(text = { Text("Edit category…") }, onClick = { menu = false; onRename() })
                 DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })
             }
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+}
+
+@Composable
+private fun EditCategoryDialog(
+    category: Category,
+    groups: List<CategoryGroup>,
+    onSave: (Category) -> Unit,
+    onGoal: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf(category.name) }
+    var groupId by remember { mutableStateOf(category.groupId) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit category") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Picker("Group", groups.map { PickerOption(it.id, it.name) }, groupId, { groupId = it }, Modifier.fillMaxWidth())
+                OutlinedButton(onClick = onGoal) { Text(if (category.goal == null) "Set goal…" else "Edit goal…") }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = name.isNotBlank(), onClick = {
+                onSave(category.copy(name = name.trim(), groupId = groupId))
+            }) { Text("Save") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
 }
 
 @Composable

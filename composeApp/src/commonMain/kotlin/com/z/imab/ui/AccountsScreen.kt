@@ -81,8 +81,8 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
             }
         }
         val sections = listOf(
-            "Budget" to data.sortedAccounts.filter { it.onBudget && !it.closed },
-            "Tracking" to data.sortedAccounts.filter { !it.onBudget && !it.closed },
+            "Budget" to data.sortedAccounts.filter { it.inBudget && !it.closed },
+            "Tracking" to data.sortedAccounts.filter { !it.inBudget && !it.closed },
             "Closed" to data.sortedAccounts.filter { it.closed },
         )
         for ((title, accounts) in sections) {
@@ -227,7 +227,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                 )
             }
-            if (account?.type == com.z.imab.model.AccountType.LOAN) LoanSummary(account, data) { editingAccount = true }
+            if (account?.type?.isLoan == true) LoanSummary(account, data) { editingAccount = true }
             cardInfo?.let { c ->
                 Text(
                     when {
@@ -310,7 +310,12 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
         AccountDialog(
             initial = account,
             newId = store.budget::newId,
-            onSave = { a, _, _ -> store.budget.saveAccount(a); editingAccount = false },
+            currentBalance = data.balance(account.id),
+            onSave = { a, bal, _ ->
+                store.budget.saveAccount(a)
+                if (a.type.isLoan) store.budget.setLoanPrincipal(a.id, -bal)
+                editingAccount = false
+            },
             onDelete = { store.budget.deleteAccount(account.id); editingAccount = false; nav.accountId = null },
             onDismiss = { editingAccount = false },
         )

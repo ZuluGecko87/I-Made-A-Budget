@@ -25,6 +25,7 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   - *Fund goals* fills underfunded goals from Ready to Assign (monthly spending first, then savings).
 - **You can't assign more than you have**: assigning is capped at what's in Ready to Assign
   (lowering an amount is always allowed).
+- Tap a category's name to rename it, move it to another group, or set its goal; tap its numbers to assign money.
 - Add a transaction from the account list with the **+** next to each account, or inside an account.
 - **Bank import** of QuickBooks `.qbo` files (`.qfx` and `.ofx` work too). On the Mac you can drag
   the file onto an account's transactions to import into that account.
@@ -39,7 +40,7 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
 
 ## Loans and mortgages
 
-Give a Loan account its principal remaining, interest rate and monthly escrow. Link payments to it
+Give a Loan or Mortgage account its principal remaining, interest rate and monthly escrow (when adding it, or later by editing it — editing the principal corrects the balance and re-splits the payments). Loans are always tracked outside the budget, so what you owe never reduces Ready to Assign. Link payments to it
 (the *Loan payment* option on a transaction, or a rule such as "main street mortgage" → Mortgage,
 payment on Home Loan). Each payment is split:
 

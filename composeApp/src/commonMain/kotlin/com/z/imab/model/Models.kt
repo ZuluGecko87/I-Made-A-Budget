@@ -25,12 +25,16 @@ enum class AccountType(val label: String) {
     CASH("Cash"),
     LINE_OF_CREDIT("Line of credit"),
     LOAN("Loan"),
+    MORTGAGE("Mortgage"),
     INVESTMENT("Investment"),
     OTHER("Other"),
     ;
 
     /** Credit accounts get a payment category, and spending on them moves money into it. */
     val isCredit: Boolean get() = this == CREDIT_CARD || this == LINE_OF_CREDIT
+
+    /** Loans and mortgages: tracked outside the budget, with terms to split payments. */
+    val isLoan: Boolean get() = this == LOAN || this == MORTGAGE
 }
 
 @Serializable
@@ -46,7 +50,13 @@ data class Account(
     val sortOrder: Int = 0,
     /** For loans and mortgages: used to split each payment into principal, interest and escrow. */
     val loan: LoanTerms? = null,
-)
+) {
+    /**
+     * Whether this account's money counts in the budget. Loans never do, even if marked otherwise:
+     * what you owe isn't money to assign; the payments from checking are what get budgeted.
+     */
+    val inBudget: Boolean get() = onBudget && !type.isLoan
+}
 
 @Serializable
 data class LoanTerms(

@@ -111,8 +111,8 @@ class Budget(
 
             val pairId = input.transferPairId ?: old?.transferPairId ?: "${input.id}-x"
             if (old?.transferPairId != null && old.transferPairId != pairId) removeTxn(old.transferPairId, removePair = false)
-            val fromOn = d.accounts[input.accountId]?.onBudget == true
-            val toOn = d.accounts[xfer]?.onBudget == true
+            val fromOn = d.accounts[input.accountId]?.inBudget == true
+            val toOn = d.accounts[xfer]?.inBudget == true
             val t = input.copy(
                 transferAccountId = xfer,
                 transferPairId = pairId,
@@ -242,7 +242,9 @@ class Budget(
     // ---------------------------------------------------------------- accounts
 
     /** Creates or updates an account. A starting balance is only used for a new account. */
-    fun saveAccount(account: Account, startingBalance: Long = 0, startDate: LocalDate? = null): String = edit {
+    fun saveAccount(input: Account, startingBalance: Long = 0, startDate: LocalDate? = null): String = edit {
+        // Loans are always tracked outside the budget.
+        val account = if (input.type.isLoan) input.copy(onBudget = false) else input
         val previous = d.accounts[account.id]
         val isNew = previous == null
         put(Kinds.ACCOUNT, account.id, account, Account.serializer())
@@ -252,6 +254,26 @@ class Budget(
             putTxn(startingBalanceTxn(newId(), account, startingBalance, startDate))
         }
         account.id
+    }
+
+    /**
+     * Sets how much is still owed on a loan today, by adjusting its starting balance, then re-splits
+     * its payments (their interest depends on the balance).
+     */
+    fun setLoanPrincipal(accountId: String, owed: Long) = edit {
+        val account = d.accounts[accountId] ?: return@edit
+        // Changing the opening balance changes each payment's interest and so its principal, which
+        // moves the balance again; repeat until it lands on [owed] (the change shrinks each round).
+        repeat(20) {
+            val delta = -owed - d.transactions.values.filter { it.accountId == accountId }.sumOf { it.amount }
+            if (delta == 0L) return@edit
+            val opening = d.transactions.values.firstOrNull {
+                it.accountId == accountId && it.payee == ImportWindow.STARTING_BALANCE_PAYEE && it.importId == null
+            }
+            val date = opening?.date ?: d.transactions.values.filter { it.accountId == accountId }.minOfOrNull { it.date } ?: today()
+            putTxn(startingBalanceTxn(opening?.id ?: newId(), account, (opening?.amount ?: 0) + delta, date))
+            recalcLoan(accountId, null)
+        }
     }
 
     /**
@@ -276,7 +298,7 @@ class Budget(
         amount = amount,
         payee = ImportWindow.STARTING_BALANCE_PAYEE,
         categoryId = when {
-            !account.onBudget -> null
+            !account.inBudget -> null
             account.type.isCredit && amount < 0 -> PREEXISTING_DEBT
             else -> READY_TO_ASSIGN
         },

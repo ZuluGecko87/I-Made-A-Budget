@@ -155,6 +155,25 @@ class ScreenshotTest {
         b.applyImport("chk", null, com.z.imab.importer.ImportMatcher.analyze(mstmt.transactions.filter { it.fitId == "MORT10" }, "chk", b.data))
         nav.openAccount("home"); shot("loan-register-wide", 1800, 900)
         nav.go(Screen.Settings); shot("settings-rules-wide", 1800, 1300)
+
+        // The account form for a new mortgage and for editing the existing loan.
+        fun dialogShot(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {
+            val scene = ImageComposeScene(1100, 1500, Density(1.5f)) {
+                androidx.compose.material3.MaterialTheme(colorScheme = com.z.imab.ui.LightColors) {
+                    androidx.compose.material3.Surface(Modifier.fillMaxSize()) {}
+                    content()
+                }
+            }
+            for (ms in 0L until 600L step 100L) scene.render(ms * 1_000_000)
+            File(out, "$name.png").writeBytes(scene.render(600_000_000).encodeToData(EncodedImageFormat.PNG)!!.bytes)
+            scene.close()
+        }
+        dialogShot("dialog-new-mortgage") {
+            com.z.imab.ui.AccountDialog(null, { "x" }, suggestedName = "House", suggestedType = AccountType.MORTGAGE, onSave = { _, _, _ -> }, onDelete = null, onDismiss = {})
+        }
+        dialogShot("dialog-edit-loan") {
+            com.z.imab.ui.AccountDialog(b.data.accounts.getValue("home"), { "x" }, currentBalance = b.data.balance("home"), onSave = { _, _, _ -> }, onDelete = {}, onDismiss = {})
+        }
         store.setTheme("dark")
         nav.go(Screen.Budget); shot("budget-dark-wide", 1800, 1200)
         shot("splash-dark-phone", 620, 1300, splash = true)

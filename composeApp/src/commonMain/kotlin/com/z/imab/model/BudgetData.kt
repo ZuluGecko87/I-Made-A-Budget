@@ -15,7 +15,7 @@ data class BudgetData(
 
     val sortedAccounts: List<Account> by lazy {
         accounts.values.sortedWith(
-            compareBy<Account>({ it.closed }, { !it.onBudget }, { it.sortOrder }, { it.name.lowercase() })
+            compareBy<Account>({ it.closed }, { !it.inBudget }, { it.sortOrder }, { it.name.lowercase() })
         )
     }
 
@@ -50,11 +50,11 @@ data class BudgetData(
         else -> categories[id]?.name ?: "Uncategorized"
     }
 
-    fun isOnBudget(accountId: String?): Boolean = accountId?.let { accounts[it]?.onBudget } == true
+    fun isOnBudget(accountId: String?): Boolean = accountId?.let { accounts[it]?.inBudget } == true
 
     /** On-budget credit card or line of credit. */
     fun isCreditAccount(accountId: String?): Boolean =
-        accountId?.let { accounts[it] }?.let { it.onBudget && it.type.isCredit } == true
+        accountId?.let { accounts[it] }?.let { it.inBudget && it.type.isCredit } == true
 
     /** Credit accounts that have a payment category, in display order. */
     val creditAccounts: List<Account> by lazy { sortedAccounts.filter { isCreditAccount(it.id) } }
