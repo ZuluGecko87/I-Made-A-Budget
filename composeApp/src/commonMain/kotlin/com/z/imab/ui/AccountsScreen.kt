@@ -26,6 +26,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.TextButton
+import com.z.imab.importer.ImportMatcher
+import com.z.imab.importer.MergeCandidate
+import com.z.imab.importer.MergeFinder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -51,6 +59,7 @@ import com.z.imab.model.YearMonth
 fun AccountsScreen(store: BudgetStore, nav: NavState) {
     val data by store.data.collectAsState()
     var adding by remember { mutableStateOf(false) }
+    val duplicates = remember(data) { MergeFinder.countByAccount(data) }
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
@@ -82,7 +91,7 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
                     Text(Money.format(accounts.sumOf { data.balance(it.id) }), fontWeight = FontWeight.SemiBold)
                 }
             }
-            items(accounts, key = { it.id }) { a -> AccountRow(a, data) { nav.openAccount(a.id) } }
+            items(accounts, key = { it.id }) { a -> AccountRow(a, data, duplicates[a.id] ?: 0) { nav.openAccount(a.id) } }
         }
         if (data.uncategorizedCount > 0) {
             item {
@@ -109,7 +118,7 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
 }
 
 @Composable
-private fun AccountRow(a: Account, data: BudgetData, onClick: () -> Unit) {
+private fun AccountRow(a: Account, data: BudgetData, possibleDuplicates: Int, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -117,6 +126,13 @@ private fun AccountRow(a: Account, data: BudgetData, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(a.name, fontWeight = FontWeight.Medium)
             Text(a.type.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (possibleDuplicates > 0) {
+                Text(
+                    "$possibleDuplicates possible duplicate${if (possibleDuplicates == 1) "" else "s"} to merge",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
         }
         val bal = data.balance(a.id)
         Text(Money.format(bal), color = amountColor(bal), fontWeight = FontWeight.SemiBold)
@@ -154,6 +170,10 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                 data.categoryLabel(t).lowercase().contains(q) || Money.format(t.amount).contains(q)
         }
     }
+
+    val merges = remember(data, accountId) { if (uncategorizedView) emptyList() else MergeFinder.find(data, accountId) }
+    val inMerge = remember(merges) { merges.flatMap { listOf(it.entered.id, it.bank.id) }.toSet() }
+    var reviewingMerges by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -203,6 +223,14 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                 )
             }
         }
+        if (merges.isNotEmpty()) {
+            MergeBanner(
+                count = merges.size,
+                reviewing = reviewingMerges,
+                onReview = { reviewingMerges = !reviewingMerges },
+                onMergeAll = { merges.forEach { store.budget.mergeTransactions(it.entered.id, it.bank.id) } },
+            )
+        }
         OutlinedTextField(
             query, { query = it },
             leadingIcon = { Icon(Icons.Default.Search, null) },
@@ -216,10 +244,20 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             Text(if (uncategorizedView) "Everything has a category." else "No transactions yet.", Modifier.padding(16.dp))
         }
         LazyColumn(Modifier.weight(1f)) {
+            if (reviewingMerges) {
+                items(merges, key = { "merge-${it.entered.id}-${it.bank.id}" }) { c ->
+                    MergeCard(
+                        c, data,
+                        onMerge = { store.budget.mergeTransactions(c.entered.id, c.bank.id) },
+                        onKeepBoth = { store.budget.markNotDuplicate(c.entered.id, c.bank.id) },
+                    )
+                }
+            }
             items(rows, key = { it.first.id }) { (t, running) ->
                 TxnRow(
                     t, data, running.takeIf { wide && !uncategorizedView && query.isBlank() },
                     showAccount = uncategorizedView,
+                    possibleDuplicate = t.id in inMerge,
                     onClick = { editing = t },
                     onToggleCleared = { store.budget.setCleared(t.id, !t.cleared) },
                 )
@@ -275,6 +313,7 @@ private fun TxnRow(
     data: BudgetData,
     running: Long?,
     showAccount: Boolean,
+    possibleDuplicate: Boolean = false,
     onClick: () -> Unit,
     onToggleCleared: () -> Unit,
 ) {
@@ -291,11 +330,16 @@ private fun TxnRow(
                 append(data.categoryLabel(t))
                 if (t.memo.isNotBlank()) append(" · ").append(t.memo)
                 if (t.scheduledId != null && !t.cleared) append(" · scheduled")
+                if (possibleDuplicate) append(" · possible duplicate")
             }
             Text(
                 sub,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (needs) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = when {
+                    possibleDuplicate -> MaterialTheme.colorScheme.tertiary
+                    needs -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -313,4 +357,73 @@ private fun TxnRow(
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+}
+
+@Composable
+private fun MergeBanner(count: Int, reviewing: Boolean, onReview: () -> Unit, onMergeAll: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                Text(
+                    if (count == 1) "A transaction you entered also came in from the bank."
+                    else "$count transactions you entered also came in from the bank.",
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+            Text(
+                "Same amount, dates no more than ${ImportMatcher.DAY_WINDOW} days apart. Merge them so each shows once — " +
+                    "your payee, category and memo are kept, with the bank's date.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            Row {
+                TextButton(onClick = onReview) { Text(if (reviewing) "Hide" else "Review") }
+                TextButton(onClick = onMergeAll) { Text(if (count == 1) "Merge" else "Merge all $count") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MergeCard(c: MergeCandidate, data: BudgetData, onMerge: () -> Unit, onKeepBoth: () -> Unit) {
+    OutlinedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            MergeLine("You entered", c.entered, data)
+            MergeLine("From bank", c.bank, data)
+            Text(
+                "Both ${Money.format(c.entered.amount)}" +
+                    if (c.daysApart == 0) " on the same day" else ", ${c.daysApart} day${if (c.daysApart == 1) "" else "s"} apart",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onMerge) { Text("Merge") }
+                OutlinedButton(onClick = onKeepBoth) { Text("Not a duplicate") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MergeLine(label: String, t: Transaction, data: BudgetData) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.width(96.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Text(t.date.short(), Modifier.width(72.dp), style = MaterialTheme.typography.bodySmall)
+        Column(Modifier.weight(1f)) {
+            Text(data.payeeLabel(t), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                data.categoryLabel(t) + if (t.memo.isNotBlank()) " · ${t.memo}" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(Money.format(t.amount), color = amountColor(t.amount))
+    }
 }

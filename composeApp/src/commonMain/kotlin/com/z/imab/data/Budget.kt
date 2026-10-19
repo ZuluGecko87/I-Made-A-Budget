@@ -263,6 +263,37 @@ class Budget(
         d.transactions[id]?.let { putTxn(it.copy(cleared = cleared)) }
     }
 
+    /**
+     * Merges a transaction entered by hand with the bank's copy so it shows once. What you entered
+     * (payee, category or transfer, memo, schedule) is kept; the bank supplies its date, its id
+     * (so the next import sees it as a duplicate) and marks it cleared.
+     */
+    fun mergeTransactions(enteredId: String, bankId: String) = edit {
+        val entered = d.transactions[enteredId] ?: return@edit
+        val bank = d.transactions[bankId] ?: return@edit
+        if (entered.amount != bank.amount || entered.accountId != bank.accountId) return@edit
+        val enteredHasJob = entered.categoryId != null || entered.transferAccountId != null
+        // The bank copy goes; its transfer partner (if any) is kept as a plain transaction.
+        removeTxn(bank.id, removePair = false)
+        val merged = entered.copy(
+            date = bank.date,
+            payee = entered.payee.ifBlank { bank.payee },
+            memo = entered.memo.ifBlank { bank.memo },
+            categoryId = if (enteredHasJob) entered.categoryId else bank.categoryId,
+            transferAccountId = if (enteredHasJob) entered.transferAccountId else bank.transferAccountId,
+            transferPairId = if (enteredHasJob) entered.transferPairId else bank.transferPairId,
+            cleared = true,
+            importId = bank.importId,
+        )
+        saveTxn(merged)
+    }
+
+    /** Remembers that two transactions are separate, so they're no longer offered for merging. */
+    fun markNotDuplicate(enteredId: String, bankId: String) = edit {
+        val entered = d.transactions[enteredId] ?: return@edit
+        if (bankId !in entered.notDuplicateOf) putTxn(entered.copy(notDuplicateOf = entered.notDuplicateOf + bankId))
+    }
+
     // ---------------------------------------------------------------- scheduled
 
     fun saveScheduled(s: ScheduledTransaction) = edit { putScheduled(s) }
@@ -313,7 +344,15 @@ class Budget(
                     val sched = row.scheduledId?.let { d.scheduled[it] }
                     when {
                         existing != null -> {
-                            putTxn(existing.copy(importId = row.importId, cleared = true, payee = existing.payee.ifBlank { row.payee }))
+                            // Same as merging afterwards: keep what was entered, take the bank's date and id.
+                            saveTxn(
+                                existing.copy(
+                                    date = row.source.date,
+                                    importId = row.importId,
+                                    cleared = true,
+                                    payee = existing.payee.ifBlank { row.payee },
+                                )
+                            )
                             matched++
                         }
                         sched != null && row.scheduledDate != null -> {

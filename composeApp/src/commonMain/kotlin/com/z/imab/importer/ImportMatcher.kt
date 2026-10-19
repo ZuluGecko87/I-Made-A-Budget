@@ -72,7 +72,7 @@ object ImportMatcher {
                 claimed += dup.id
                 return@map ImportRow(
                     src, importId, MatchKind.DUPLICATE,
-                    "Already in budget (${data.payeeLabel(dup)}, ${dup.date})", ImportAction.SKIP,
+                    "Already in budget (${data.payeeLabel(dup)}, ${display(dup.date)})", ImportAction.SKIP,
                     matchedTxnId = dup.id,
                 )
             }
@@ -102,7 +102,9 @@ object ImportMatcher {
                     claimed += match.id
                     return@map ImportRow(
                         src, importId, MatchKind.MATCH_EXISTING,
-                        "Matches ${data.payeeLabel(match)} on ${match.date}", ImportAction.MATCH,
+                        "You entered ${data.payeeLabel(match)} for the same amount on ${display(match.date)}" +
+                            daysApart(match.date, src.date).let { if (it == 0) " (same day)" else " ($it day${if (it == 1) "" else "s"} apart)" },
+                        ImportAction.MATCH,
                         matchedTxnId = match.id,
                     )
                 }
@@ -113,7 +115,7 @@ object ImportMatcher {
                 val s = data.scheduled.getValue(sid)
                 return@map ImportRow(
                     src, importId, MatchKind.MATCH_SCHEDULED,
-                    "Matches scheduled ${s.payee.ifBlank { if (s.transferAccountId != null) "transfer" else "transaction" }} due $date",
+                    "Matches scheduled ${s.payee.ifBlank { if (s.transferAccountId != null) "transfer" else "transaction" }} due ${display(date)}",
                     ImportAction.MATCH,
                     scheduledId = sid, scheduledDate = date,
                 )
@@ -147,6 +149,10 @@ object ImportMatcher {
             .filter { (id, d) -> "$id|$d" !in claimed && data.transactions[Scheduler.occurrenceTxnId(id, d)] == null }
             .minByOrNull { daysApart(it.second, src.date) }
     }
+
+    /** MM/DD/YY, matching how dates are shown elsewhere in the app. */
+    private fun display(d: LocalDate) =
+        "${d.monthNumber.toString().padStart(2, '0')}/${d.dayOfMonth.toString().padStart(2, '0')}/${(d.year % 100).toString().padStart(2, '0')}"
 
     fun daysApart(a: LocalDate, b: LocalDate): Int = abs(a.toEpochDays() - b.toEpochDays())
 

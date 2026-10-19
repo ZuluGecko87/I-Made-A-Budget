@@ -89,6 +89,8 @@ data class Transaction(
     val importId: String? = null,
     /** Scheduled transaction this was entered from, if any. */
     val scheduledId: String? = null,
+    /** Transactions the user said are not duplicates of this one, so they aren't offered for merging. */
+    val notDuplicateOf: List<String> = emptyList(),
 )
 
 @Serializable

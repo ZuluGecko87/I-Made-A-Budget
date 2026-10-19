@@ -397,7 +397,7 @@ private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, 
             Text(row.source.date.short(), Modifier.width(72.dp), style = MaterialTheme.typography.bodySmall)
             Column(Modifier.weight(1f)) {
                 Text(row.payee.ifBlank { "(no payee)" }, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
-                Text(row.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(row.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Text(Money.format(row.source.amount), color = amountColor(row.source.amount))
         }
@@ -407,7 +407,8 @@ private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, 
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             val actions = buildList {
-                if (row.kind == MatchKind.MATCH_EXISTING || row.kind == MatchKind.MATCH_SCHEDULED) add(ImportAction.MATCH to "Match")
+                if (row.kind == MatchKind.MATCH_EXISTING) add(ImportAction.MATCH to "Merge with what you entered")
+                if (row.kind == MatchKind.MATCH_SCHEDULED) add(ImportAction.MATCH to "Match scheduled")
                 add(ImportAction.ADD to "Add as new")
                 add(ImportAction.SKIP to "Skip")
             }

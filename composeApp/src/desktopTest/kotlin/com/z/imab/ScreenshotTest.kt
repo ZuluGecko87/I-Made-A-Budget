@@ -33,6 +33,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import org.jetbrains.skia.EncodedImageFormat
 import java.io.File
 import kotlin.test.Test
@@ -114,6 +115,22 @@ class ScreenshotTest {
         val stmt = com.z.imab.importer.OfxParser.parse(Samples.QBO_CHECKING).single()
         b.applyImport("chk", stmt.accountKey, com.z.imab.importer.ImportMatcher.analyze(stmt.transactions, "chk", b.data))
         nav.openAccount("chk"); nav.importFile(qbo); shot("import-again-wide", 1800, 1100)
+
+        // Something entered by hand that the bank also sent (added as new instead of merged).
+        b.saveTransaction(Transaction("hand", "chk", month.firstDay.plus(1, DateTimeUnit.DAY), -6789, "Target", "school supplies", categoryId = "seed-shopping"))
+        b.applyImport(
+            "chk", null,
+            listOf(com.z.imab.importer.OfxTransaction("T1", "DEBIT", month.firstDay.plus(3, DateTimeUnit.DAY), -6789, "TARGET 00012345", "", null))
+                .let { com.z.imab.importer.ImportMatcher.analyze(it, "chk", b.data) }
+                .map { it.copy(action = com.z.imab.importer.ImportAction.ADD) },
+        )
+        nav.openAccount("chk"); shot("register-merge-wide", 1800, 1100)
+        nav.go(Screen.Accounts); shot("accounts-merge-phone", 620, 900)
+        // And the import preview when the bank file arrives after you entered it.
+        b.saveTransaction(Transaction("hand2", "chk", month.firstDay.plus(10, DateTimeUnit.DAY), -2500, "Gas", categoryId = "seed-transportation"))
+        nav.openAccount("chk")
+        nav.importFile(PickedFile("gas.qbo", Samples.QBO_CHECKING.replace("<TRNAMT>-1200.00", "<TRNAMT>-25.00").replace("20261005", "20261012").replace("20261005001", "GAS1")))
+        shot("import-merge-wide", 1800, 1300)
         store.setTheme("dark")
         nav.go(Screen.Budget); shot("budget-dark-wide", 1800, 1200)
         shot("splash-dark-phone", 620, 1300, splash = true)
