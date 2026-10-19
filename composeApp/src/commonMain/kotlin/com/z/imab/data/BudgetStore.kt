@@ -28,6 +28,8 @@ data class Settings(
     val syncName: String? = null,
     /** "system", "light" or "dark". */
     val theme: String = "system",
+    /** Full sync this often; new versions of the file are also picked up as soon as they arrive. */
+    val syncIntervalMinutes: Int = 5,
 )
 
 sealed interface SyncStatus {
@@ -63,6 +65,11 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
     private var saveJob: Job? = null
     private var syncJob: Job? = null
     private var dirtySinceSync = false
+    /** Fingerprint of the sync file when we last read or wrote it. */
+    private var lastStamp: String? = null
+    private var lastSyncAt = 0L
+    /** Whether the app is on screen; watching for new versions only happens then. */
+    private var inForeground = true
 
     private fun now() = Clock.System.now().toEpochMilliseconds()
 
@@ -100,13 +107,34 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
         _loaded.value = true
 
         scope.launch {
-            syncNow()
+            // On opening, merge with the cloud copy and always save this device's version to it.
+            syncNow(forceWrite = true)
             while (isActive) {
-                delay(SYNC_INTERVAL_MS)
-                budget.processScheduled(today())
-                syncNow()
+                delay(WATCH_INTERVAL_MS)
+                tick()
             }
         }
+    }
+
+    /**
+     * Runs every few seconds: syncs straight away when another device's version of the file has
+     * arrived, and otherwise every [Settings.syncIntervalMinutes].
+     */
+    internal suspend fun tick() {
+        val location = syncLocation ?: return
+        if (syncMutex.isLocked) return
+        val due = now() - lastSyncAt >= _settings.value.syncIntervalMinutes * 60_000L
+        val arrived = inForeground &&
+            runCatching { storage.syncStamp(location) }.getOrNull().let { it != null && it != lastStamp }
+        if (due || arrived) {
+            budget.processScheduled(today())
+            syncNow()
+        }
+    }
+
+    fun setSyncInterval(minutes: Int) {
+        _settings.value = _settings.value.copy(syncIntervalMinutes = minutes)
+        scope.launch { saveSettings() }
     }
 
     private fun scheduleSave() {
@@ -118,7 +146,8 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
         if (syncLocation != null) {
             syncJob?.cancel()
             syncJob = scope.launch {
-                delay(3_000)
+                // Short pause so a burst of edits is saved as one version.
+                delay(1_000)
                 syncNow()
             }
         }
@@ -161,22 +190,29 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
         scope.launch { syncNow() }
     }
 
+    /** Call when the app goes to the background (phone). */
+    fun onPause() {
+        inForeground = false
+    }
+
     /** Call when the app comes back to the foreground. */
     fun onResume() {
+        inForeground = true
         if (!_loaded.value) return
         budget.processScheduled(today())
         requestSync()
     }
 
-    suspend fun syncNow() {
+    suspend fun syncNow(forceWrite: Boolean = false) {
         if (syncLocation == null) return
-        syncMutex.withLock { syncLocked() }
+        syncMutex.withLock { syncLocked(forceWrite) }
     }
 
-    private suspend fun syncLocked() {
+    private suspend fun syncLocked(forceWrite: Boolean = false) {
         val location = syncLocation ?: return
         _sync.value = SyncStatus.Syncing
         try {
+            val stampBefore = runCatching { storage.syncStamp(location) }.getOrNull()
             val files = storage.readSync(location)
             val mainText = files.firstOrNull().orEmpty()
             // Never overwrite a file we can't read: it may not be an IMAB file at all.
@@ -188,11 +224,16 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
             if (pulled > 0) budget.processScheduled(today())
 
             // Rewrite when the file is missing changes, or when it has leftovers from an untruncated write.
-            val push = !budget.ledger.sameAs(remote) || (mainText.isNotBlank() && Ledger.hasLeftovers(mainText))
+            val push = forceWrite || !budget.ledger.sameAs(remote) || (mainText.isNotBlank() && Ledger.hasLeftovers(mainText))
             if (push) storage.writeSync(location, budget.ledger.encode())
+            // Remember the file as we left it, so our own write doesn't look like a new arrival.
+            lastStamp = if (push) runCatching { storage.syncStamp(location) }.getOrNull() else stampBefore
+            lastSyncAt = now()
             _sync.value = SyncStatus.Synced(now(), pulled, push)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
+            // Count a failure as an attempt so it's retried at the normal pace, not every few seconds.
+            lastSyncAt = now()
             _sync.value = SyncStatus.Failed(now(), e.message ?: e::class.simpleName ?: "Sync failed")
         }
     }
@@ -214,7 +255,8 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
     companion object {
         const val LEDGER_FILE = "ledger.json"
         const val SETTINGS_FILE = "settings.json"
-        const val SYNC_INTERVAL_MS = 90_000L
+        /** How often to check whether a new version of the sync file has arrived. */
+        const val WATCH_INTERVAL_MS = 5_000L
         const val DEFAULT_SYNC_FILE_NAME = "IMAB-budget.json"
     }
 }

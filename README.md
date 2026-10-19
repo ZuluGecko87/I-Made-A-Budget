@@ -87,9 +87,17 @@ per item. So:
 - conflict copies the service creates next to the file (e.g. `IMAB-budget-MacBook.json`) are merged in on the Mac;
 - IMAB refuses to overwrite a file that isn't an IMAB budget.
 
-Each device also keeps its own full copy, so the app works offline and syncs when it can:
-on start, about 3 s after a change, every 90 s, when the Android app comes back to the
-foreground, and when the Mac app quits.
+Each device also keeps its own full copy, so the app works offline. It syncs:
+
+- when it opens (and always saves its version to the cloud file then),
+- about a second after each change,
+- as soon as a newer version of the file arrives from another device (it checks the file's
+  timestamp every 5 seconds while on screen),
+- when you come back to the app or window,
+- and on a timer, every 5 minutes by default (Settings → Auto-sync: 1, 5, 15 or 30 minutes).
+
+How fast another device sees a change also depends on the cloud app (OneDrive, Drive, Dropbox)
+uploading and downloading the file.
 
 **Set up**: on the first device go to Settings → *Create sync file…* and save it in your
 OneDrive / Google Drive / Dropbox folder. On every other device use *Use existing sync file…*

@@ -23,6 +23,12 @@ interface Storage {
     suspend fun readSync(location: SyncLocation): List<String>
 
     suspend fun writeSync(location: SyncLocation, text: String)
+
+    /**
+     * A cheap fingerprint of the sync file (and any conflict copies), e.g. modified time and size,
+     * without reading it. When it changes, another device's version has arrived. Null if unknown.
+     */
+    suspend fun syncStamp(location: SyncLocation): String? = null
 }
 
 /** System file pickers; implemented per platform. */

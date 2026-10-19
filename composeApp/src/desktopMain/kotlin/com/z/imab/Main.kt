@@ -39,7 +39,14 @@ fun main() = application {
         icon = AppIconPainter,
         state = rememberWindowState(width = 1200.dp, height = 820.dp),
     ) {
-        LaunchedEffect(Unit) { installFileDrop(window, nav) }
+        LaunchedEffect(Unit) {
+            installFileDrop(window, nav)
+            // Coming back to the window checks for changes made on other devices.
+            window.addWindowFocusListener(object : java.awt.event.WindowFocusListener {
+                override fun windowGainedFocus(e: java.awt.event.WindowEvent) = store.onResume()
+                override fun windowLostFocus(e: java.awt.event.WindowEvent) {}
+            })
+        }
         App(store, pickers, nav)
     }
 }

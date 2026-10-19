@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,6 +48,15 @@ class AndroidStorage(private val context: Context) : Storage {
         val text = context.contentResolver.openInputStream(Uri.parse(location.id))?.use { it.readBytes().decodeToString() }
             ?: error("Can't open the sync file. Pick it again in Settings.")
         listOf(text)
+    }
+
+    override suspend fun syncStamp(location: SyncLocation): String? = withContext(Dispatchers.IO) {
+        val cols = arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED, DocumentsContract.Document.COLUMN_SIZE)
+        runCatching {
+            context.contentResolver.query(Uri.parse(location.id), cols, null, null, null)?.use { c ->
+                if (c.moveToFirst()) "${c.getLong(0)}:${c.getLong(1)}" else null
+            }
+        }.getOrNull()
     }
 
     override suspend fun writeSync(location: SyncLocation, text: String): Unit = withContext(Dispatchers.IO) {

@@ -23,7 +23,10 @@ import kotlin.test.assertTrue
 class SyncTest {
     private class Cloud {
         var main = ""
+            set(value) { field = value; version++ }
         val copies = mutableListOf<String>()
+        var version = 0
+        var writes = 0
     }
 
     private class DeviceStorage(val cloud: Cloud, override val defaultDeviceName: String) : Storage {
@@ -31,7 +34,8 @@ class SyncTest {
         override suspend fun readLocal(name: String) = local[name]
         override suspend fun writeLocal(name: String, text: String) { local[name] = text }
         override suspend fun readSync(location: SyncLocation) = listOf(cloud.main) + cloud.copies
-        override suspend fun writeSync(location: SyncLocation, text: String) { cloud.main = text }
+        override suspend fun writeSync(location: SyncLocation, text: String) { cloud.main = text; cloud.writes++ }
+        override suspend fun syncStamp(location: SyncLocation) = "v${cloud.version}"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
@@ -46,7 +50,7 @@ class SyncTest {
     }
 
     @Test
-    fun twoDevicesConverge() = runBlocking {
+    fun twoDevicesConverge() = runBlocking<Unit> {
         val cloud = Cloud()
         val mac = device(cloud, "mac")
         mac.budget.saveAccount(Account("chk", "Checking"))
@@ -66,7 +70,7 @@ class SyncTest {
     }
 
     @Test
-    fun lostOverwriteIsRepairedOnNextSync() = runBlocking {
+    fun lostOverwriteIsRepairedOnNextSync() = runBlocking<Unit> {
         val cloud = Cloud()
         val mac = device(cloud, "mac")
         val phone = device(cloud, "phone")
@@ -86,7 +90,7 @@ class SyncTest {
     }
 
     @Test
-    fun conflictCopiesAreMergedIn() = runBlocking {
+    fun conflictCopiesAreMergedIn() = runBlocking<Unit> {
         val cloud = Cloud()
         val other = device(Cloud(), "other")
         other.budget.saveAccount(Account("c", "Only in conflict copy"))
@@ -99,7 +103,7 @@ class SyncTest {
     }
 
     @Test
-    fun fileWithLeftoversFromAnUntruncatedWriteStillSyncsAndIsCleaned() = runBlocking {
+    fun fileWithLeftoversFromAnUntruncatedWriteStillSyncsAndIsCleaned() = runBlocking<Unit> {
         val cloud = Cloud()
         val phone = device(cloud, "phone")
         phone.budget.saveAccount(Account("chk", "Checking {main}", AccountType.CHECKING))
@@ -124,7 +128,42 @@ class SyncTest {
     }
 
     @Test
-    fun neverOverwritesAFileThatIsNotIMAB() = runBlocking {
+    fun newVersionFromAnotherDeviceIsPickedUpWithoutWaitingForTheTimer() = runBlocking<Unit> {
+        val cloud = Cloud()
+        val mac = device(cloud, "mac")
+        val phone = device(cloud, "phone")
+        mac.syncNow(); phone.syncNow()
+
+        phone.budget.saveAccount(Account("new", "From phone"))
+        phone.syncNow()
+        // The Mac's 5-minute timer isn't due, but the file changed, so the next check syncs.
+        mac.tick()
+        assertTrue("new" in mac.data.value.accounts)
+    }
+
+    @Test
+    fun checksDoNothingWhenTheFileHasNotChanged() = runBlocking<Unit> {
+        val cloud = Cloud()
+        val mac = device(cloud, "mac")
+        mac.syncNow()
+        val writes = cloud.writes
+        repeat(5) { mac.tick() }
+        assertEquals(writes, cloud.writes)
+        assertIs<SyncStatus.Synced>(mac.syncStatus.value)
+    }
+
+    @Test
+    fun openingTheAppSavesItsVersionEvenIfNothingChanged() = runBlocking<Unit> {
+        val cloud = Cloud()
+        val mac = device(cloud, "mac")
+        mac.syncNow()
+        val writes = cloud.writes
+        mac.syncNow(forceWrite = true)
+        assertEquals(writes + 1, cloud.writes)
+    }
+
+    @Test
+    fun neverOverwritesAFileThatIsNotIMAB() = runBlocking<Unit> {
         val cloud = Cloud().apply { main = "{\"ops\": [], \"hello\": \"my spreadsheet\"}" }
         val mac = device(cloud, "mac")
         mac.syncNow()

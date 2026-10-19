@@ -43,6 +43,11 @@ class DesktopStorage : Storage {
         listOf(main) + conflictCopies(file).mapNotNull { runCatching { it.readText() }.getOrNull() }
     }
 
+    override suspend fun syncStamp(location: SyncLocation): String = withContext(Dispatchers.IO) {
+        val file = File(location.id)
+        (listOf(file) + conflictCopies(file)).joinToString("|") { "${it.name}:${it.lastModified()}:${it.length()}" }
+    }
+
     override suspend fun writeSync(location: SyncLocation, text: String) = withContext(Dispatchers.IO) {
         val file = File(location.id)
         if (file.parentFile?.isDirectory != true) error("Folder ${file.parent} isn't available. Is the cloud drive signed in?")

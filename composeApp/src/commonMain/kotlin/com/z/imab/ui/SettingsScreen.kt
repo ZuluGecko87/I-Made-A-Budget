@@ -75,6 +75,21 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers) {
                     fontWeight = FontWeight.Medium,
                 )
                 Text(syncText(sync), color = if (sync is SyncStatus.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                if (settings.syncId != null) {
+                    Picker(
+                        "Auto-sync",
+                        listOf(1, 5, 15, 30).map { PickerOption(it, if (it == 1) "Every minute" else "Every $it minutes") },
+                        settings.syncIntervalMinutes,
+                        store::setSyncInterval,
+                        Modifier.widthIn(max = 320.dp).fillMaxWidth(),
+                    )
+                    Text(
+                        "Also syncs when the app opens, about a second after each change, when you come back to the app, " +
+                            "and as soon as a newer version of the file arrives from another device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 val location = settings.syncId?.let { com.z.imab.platform.SyncLocation(it, settings.syncName ?: it) }
                 val cloudApp = location?.let(pickers::syncAppName)
