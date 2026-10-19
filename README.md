@@ -6,7 +6,9 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
 ## Features
 
 - **Budget**: category groups and categories, monthly Assigned / Activity / Available, Ready to Assign.
-  Balances carry forward month to month, including overspending, until you cover it.
+  Leftover money carries forward. At the end of a month an overspent category resets to zero:
+  cash overspending comes out of next month's Ready to Assign, credit overspending becomes card debt.
+- **Credit cards** are budgeted like cash: spending on a card moves money into its payment category (see below).
 - **Accounts**: budget and tracking (off-budget) accounts, cleared / uncleared balances, running balance, search.
 - **Every transaction gets a category.** Anything missing one is flagged on the Budget screen and
   listed under "Needs a category".
@@ -20,6 +22,26 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   - new transactions get the category you last used for that payee;
   - the bank account is remembered, so the next file from it goes to the right account.
 - **Sync** through OneDrive, Google Drive or Dropbox.
+
+## Credit cards
+
+Credit card and line-of-credit accounts on the budget each get a payment category, shown in the
+**Credit Card Payments** group at the top of the budget.
+
+- **Spending on the card** in, say, Groceries moves that money from Groceries into the card's
+  payment category, so the money to pay the bill is already set aside. A refund moves it back.
+- **Credit overspending** (shown in amber): if Groceries doesn't have enough, only the covered part
+  moves. The rest is new debt. Cover it in the same month and the payment category gets it; otherwise
+  it stays as debt and does *not* come out of next month's Ready to Assign.
+- **Paying the card** is a transfer from checking (*Make payment* on the card, or *Record payment*
+  on its budget row). It spends from the payment category. Paying more than the category holds is
+  cash overspending.
+- **Debt you already had** when you added the card is categorized *Pre-existing debt*. It isn't in
+  the budget; pay it down by assigning money to the payment category (*Fund whole balance* does it in one step).
+- Each card shows what you owe and how much of it isn't covered by the payment category yet.
+- Cash advances add to the payment category (you'll owe them back); balance transfers move it
+  between cards. Uncategorized card spending and rewards credited as Ready to Assign keep the payment category in step.
+- Credit cards marked as tracking (off-budget) accounts have no payment category.
 
 ## How sync works
 
@@ -74,7 +96,6 @@ composeApp/src/
 
 ## Not built yet
 
-- Credit card payment categories (card spending is budgeted from its category like any other account; paying the card is a transfer).
 - Splitting one transaction across several categories.
 - Reports, goals/targets, and CSV import.
 - A custom Mac app icon (it uses the default one for now).

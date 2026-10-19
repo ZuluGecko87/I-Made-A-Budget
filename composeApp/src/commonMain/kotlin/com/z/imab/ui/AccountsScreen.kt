@@ -39,11 +39,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.z.imab.budget.BudgetMath
 import com.z.imab.data.BudgetStore
 import com.z.imab.model.Account
 import com.z.imab.model.BudgetData
 import com.z.imab.model.Money
 import com.z.imab.model.Transaction
+import com.z.imab.model.YearMonth
 
 @Composable
 fun AccountsScreen(store: BudgetStore, nav: NavState) {
@@ -133,6 +135,11 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
     }
     var editing by remember { mutableStateOf<Transaction?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var paying by remember { mutableStateOf<Transaction?>(null) }
+    val isCard = data.isCreditAccount(accountId)
+    val cardInfo = remember(data, accountId) {
+        if (isCard) BudgetMath.compute(data, YearMonth.of(today())).cards.firstOrNull { it.accountId == accountId } else null
+    }
     var editingAccount by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
 
@@ -168,7 +175,24 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             }
             FlowRow(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { adding = true }) { Icon(Icons.Default.Add, null); Text("Add transaction") }
+                if (isCard && data.sortedAccounts.size > 1) {
+                    OutlinedButton(onClick = { paying = paymentTemplate(data, accountId, cardInfo?.available ?: 0, store.budget.newId()) }) {
+                        Text("Make payment")
+                    }
+                }
                 OutlinedButton(onClick = { nav.importInto(accountId) }) { Text("Import bank file") }
+            }
+            cardInfo?.let { c ->
+                Text(
+                    when {
+                        c.owed <= 0 -> "Paid off. Spending on this card moves money from its category into the payment category."
+                        c.underfunded == 0L -> "Payment category has ${Money.format(c.available)} set aside — enough to pay the ${Money.format(c.owed)} balance."
+                        else -> "Payment category has ${Money.format(maxOf(0, c.available))} set aside; ${Money.format(c.underfunded)} of the ${Money.format(c.owed)} balance isn't covered yet."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (c.underfunded > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                )
             }
         }
         OutlinedTextField(
@@ -205,6 +229,17 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             onSave = { store.budget.saveTransaction(it); adding = false; editing = null },
             onDelete = t?.let { { store.budget.deleteTransaction(it.id); editing = null } },
             onDismiss = { adding = false; editing = null },
+        )
+    }
+    paying?.let { t ->
+        TransactionDialog(
+            data = data,
+            initial = t,
+            defaultAccountId = t.accountId,
+            newId = store.budget::newId,
+            onSave = { store.budget.saveTransaction(it); paying = null },
+            onDelete = null,
+            onDismiss = { paying = null },
         )
     }
     if (editingAccount && account != null) {

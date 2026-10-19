@@ -38,13 +38,22 @@ data class BudgetData(
 
     fun accountName(id: String?): String = id?.let { accounts[it]?.name } ?: "(deleted account)"
 
-    fun categoryName(id: String?): String = when (id) {
-        null -> "Uncategorized"
-        READY_TO_ASSIGN -> "Ready to Assign"
+    fun categoryName(id: String?): String = when {
+        id == null -> "Uncategorized"
+        id == READY_TO_ASSIGN -> "Ready to Assign"
+        id == PREEXISTING_DEBT -> "Pre-existing debt"
+        id.startsWith(CC_PAYMENT_PREFIX) -> "${accountName(id.removePrefix(CC_PAYMENT_PREFIX))} Payment"
         else -> categories[id]?.name ?: "Uncategorized"
     }
 
     fun isOnBudget(accountId: String?): Boolean = accountId?.let { accounts[it]?.onBudget } == true
+
+    /** On-budget credit card or line of credit. */
+    fun isCreditAccount(accountId: String?): Boolean =
+        accountId?.let { accounts[it] }?.let { it.onBudget && it.type.isCredit } == true
+
+    /** Credit accounts that have a payment category, in display order. */
+    val creditAccounts: List<Account> by lazy { sortedAccounts.filter { isCreditAccount(it.id) } }
 
     /** True for a transfer whose two legs are both on- or both off-budget, so no category applies. */
     fun isInternalTransfer(t: Transaction): Boolean =
@@ -55,6 +64,7 @@ data class BudgetData(
     fun needsCategory(t: Transaction): Boolean {
         if (!isOnBudget(t.accountId) || isInternalTransfer(t)) return false
         val c = t.categoryId
+        if (c == PREEXISTING_DEBT && isCreditAccount(t.accountId)) return false
         return c == null || (c != READY_TO_ASSIGN && c !in categories)
     }
 

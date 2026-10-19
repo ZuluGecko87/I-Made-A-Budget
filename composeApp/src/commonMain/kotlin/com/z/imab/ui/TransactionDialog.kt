@@ -100,10 +100,13 @@ fun TransactionDialog(
     }
     var cleared by remember { mutableStateOf(initial?.cleared ?: false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    // A prefilled template (e.g. a card payment) isn't saved yet, so it's still "new".
+    val isNew = initial == null || initial.id !in data.transactions
+    val isCardPayment = isNew && data.isCreditAccount(initial?.transferAccountId) && (initial?.amount ?: 0) < 0
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "Add transaction" else "Edit transaction") },
+        title = { Text(if (isCardPayment) "Record card payment" else if (isNew) "Add transaction" else "Edit transaction") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TxnFields(form, data, "Date")
@@ -300,4 +303,17 @@ fun AccountDialog(
             onConfirm = onDelete,
         )
     }
+}
+
+/**
+ * A payment to [cardId] from the first budget (non-credit) account, for [amount] or what's owed if
+ * that's less, or null if there's no other account to pay from. Open it in [TransactionDialog] so the account and amount can be changed before saving.
+ */
+fun paymentTemplate(data: BudgetData, cardId: String, amount: Long, id: String): Transaction? {
+    val from = data.sortedAccounts.firstOrNull { it.onBudget && !it.closed && !it.type.isCredit }
+        ?: data.sortedAccounts.firstOrNull { it.id != cardId }
+        ?: return null
+    val owed = maxOf(0, -data.balance(cardId))
+    val pay = if (amount > 0) minOf(amount, owed).takeIf { it > 0 } ?: amount else owed
+    return Transaction(id, from.id, today(), -pay, transferAccountId = cardId)
 }

@@ -44,11 +44,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.z.imab.budget.BudgetMath
+import com.z.imab.budget.CardPayment
 import com.z.imab.budget.CategoryMonth
 import com.z.imab.data.BudgetStore
 import com.z.imab.model.Category
 import com.z.imab.model.CategoryGroup
 import com.z.imab.model.Money
+import com.z.imab.model.Transaction
 import com.z.imab.model.YearMonth
 
 @Composable
@@ -58,7 +60,9 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
     val mb = remember(data, month) { BudgetMath.compute(data, month) }
     val prev = remember(data, month) { BudgetMath.compute(data, month - 1) }
 
-    var assigning by remember { mutableStateOf<Category?>(null) }
+    /** Category id and display name being assigned to (regular or credit card payment). */
+    var assigning by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var paying by remember { mutableStateOf<Transaction?>(null) }
     var renamingCategory by remember { mutableStateOf<Category?>(null) }
     var renamingGroup by remember { mutableStateOf<CategoryGroup?>(null) }
     var addingTo by remember { mutableStateOf<CategoryGroup?>(null) }
@@ -89,6 +93,9 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             if (mb.overspentCount > 0) {
                 AssistChip(onClick = {}, label = { Text("${mb.overspentCount} overspent categor${if (mb.overspentCount == 1) "y" else "ies"}") })
             }
+            if (mb.overspentLastMonth > 0) {
+                AssistChip(onClick = {}, label = { Text("${Money.format(mb.overspentLastMonth)} overspent last month") })
+            }
             if (wide) {
                 AssistChip(onClick = {}, label = { Text("Income this month: ${Money.format(mb.incomeThisMonth)}") })
             }
@@ -96,6 +103,20 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
 
         BudgetHeaderRow(wide)
         LazyColumn(Modifier.weight(1f)) {
+            if (mb.cards.isNotEmpty()) {
+                item(key = "g-cards") { CardGroupRow(mb.cards.map { mb.category(it.categoryId) }, wide) }
+                items(mb.cards, key = { "p-${it.accountId}" }) { card ->
+                    CardPaymentRow(
+                        name = data.accountName(card.accountId),
+                        card = card,
+                        cm = mb.category(card.categoryId),
+                        wide = wide,
+                        onAssign = { assigning = card.categoryId to data.categoryName(card.categoryId) },
+                        onPay = { paying = paymentTemplate(data, card.accountId, card.available, store.budget.newId()) },
+                        onOpen = { nav.openAccount(card.accountId) },
+                    )
+                }
+            }
             for (g in data.sortedGroups) {
                 val cats = data.categoriesIn(g.id)
                 item(key = "g-${g.id}") {
@@ -113,7 +134,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         category = c,
                         cm = mb.category(c.id),
                         wide = wide,
-                        onAssign = { assigning = c },
+                        onAssign = { assigning = c.id to c.name },
                         onRename = { renamingCategory = c },
                         onDelete = { deleting = "Delete \"${c.name}\"? Its transactions become uncategorized." to { store.budget.deleteCategory(c.id) } },
                     )
@@ -128,14 +149,26 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
         }
     }
 
-    assigning?.let { c ->
+    assigning?.let { (id, name) ->
         AssignDialog(
-            category = c,
+            name = name,
             month = month,
-            current = mb.category(c.id),
-            lastMonth = prev.category(c.id),
+            current = mb.category(id),
+            lastMonth = prev.category(id),
+            card = mb.cards.firstOrNull { it.categoryId == id },
             onDismiss = { assigning = null },
-            onSave = { store.budget.setAssigned(month, c.id, it); assigning = null },
+            onSave = { store.budget.setAssigned(month, id, it); assigning = null },
+        )
+    }
+    paying?.let { t ->
+        TransactionDialog(
+            data = data,
+            initial = t,
+            defaultAccountId = t.accountId,
+            newId = store.budget::newId,
+            onSave = { store.budget.saveTransaction(it); paying = null },
+            onDelete = null,
+            onDismiss = { paying = null },
         )
     }
     addingTo?.let { g ->
@@ -249,7 +282,9 @@ private fun CategoryRow(
             color = if (cm.assigned == 0L) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
         )
         if (wide) Text(Money.format(cm.activity), Modifier.width(120.dp), textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Box(Modifier.width(if (wide) 130.dp else 105.dp), contentAlignment = Alignment.CenterEnd) { AvailablePill(cm.available) }
+        Box(Modifier.width(if (wide) 130.dp else 105.dp), contentAlignment = Alignment.CenterEnd) {
+            AvailablePill(cm.available, creditOverspending = cm.creditOverspent > 0 && cm.cashOverspent == 0L)
+        }
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Category options") }
             DropdownMenu(menu, { menu = false }) {
@@ -264,10 +299,11 @@ private fun CategoryRow(
 
 @Composable
 private fun AssignDialog(
-    category: Category,
+    name: String,
     month: YearMonth,
     current: CategoryMonth,
     lastMonth: CategoryMonth,
+    card: CardPayment?,
     onDismiss: () -> Unit,
     onSave: (Long) -> Unit,
 ) {
@@ -275,14 +311,34 @@ private fun AssignDialog(
     val parsed = if (text.isBlank()) 0L else Money.parse(text)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("${category.name} · ${month.label}") },
+        title = { Text("$name · ${month.label}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Activity ${Money.format(current.activity)} · Available ${Money.format(current.available)}", style = MaterialTheme.typography.bodySmall)
+                if (card != null) {
+                    Text(
+                        "You owe ${Money.format(card.owed)} on this card. Money assigned here is set aside to pay it.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (current.creditOverspent > 0) {
+                    Text(
+                        "${Money.format(current.creditOverspent)} was charged to a credit card without money behind it. " +
+                            "Cover it this month so it can be paid off, or it stays as card debt.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
                 MoneyField("Assigned", text, { text = it }, Modifier.fillMaxWidth(), isError = parsed == null)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (current.available < 0) {
                         AssistChip(onClick = { text = Money.toInput(current.assigned - current.available) }, label = { Text("Cover overspending") })
+                    }
+                    if (card != null && card.underfunded > 0) {
+                        AssistChip(
+                            onClick = { text = Money.toInput(current.assigned + card.underfunded) },
+                            label = { Text("Fund whole balance (+${Money.format(card.underfunded)})") },
+                        )
                     }
                     AssistChip(onClick = { text = Money.toInput(lastMonth.assigned) }, label = { Text("Assigned last month (${Money.format(lastMonth.assigned)})") })
                     AssistChip(onClick = { text = Money.toInput(-lastMonth.activity) }, label = { Text("Spent last month (${Money.format(-lastMonth.activity)})") })
@@ -292,4 +348,68 @@ private fun AssignDialog(
         confirmButton = { TextButton(onClick = { parsed?.let(onSave) }, enabled = parsed != null) { Text("Assign") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+@Composable
+private fun CardGroupRow(totals: List<CategoryMonth>, wide: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (wide) "Credit Card Payments" else "Card Payments", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(Money.format(totals.sumOf { it.assigned }), Modifier.width(if (wide) 120.dp else 90.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelLarge)
+        if (wide) Text(Money.format(totals.sumOf { it.activity }), Modifier.width(120.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelLarge)
+        Text(Money.format(totals.sumOf { it.available }), Modifier.width(if (wide) 130.dp else 105.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@Composable
+private fun CardPaymentRow(
+    name: String,
+    card: CardPayment,
+    cm: CategoryMonth,
+    wide: Boolean,
+    onAssign: () -> Unit,
+    onPay: () -> Unit,
+    onOpen: () -> Unit,
+) {
+    var menu by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onAssign).padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val status = when {
+                card.owed <= 0 -> "Paid off"
+                card.underfunded == 0L -> if (wide) "Owe ${Money.format(card.owed)} · fully funded" else "Fully funded"
+                wide -> "Owe ${Money.format(card.owed)} · ${Money.format(card.underfunded)} not covered"
+                else -> "${Money.format(card.underfunded)} not covered"
+            }
+            Text(
+                status,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (card.underfunded > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            Money.format(cm.assigned),
+            Modifier.width(if (wide) 120.dp else 90.dp),
+            textAlign = TextAlign.End,
+            color = if (cm.assigned == 0L) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+        )
+        if (wide) Text(Money.format(cm.activity), Modifier.width(120.dp), textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(Modifier.width(if (wide) 130.dp else 105.dp), contentAlignment = Alignment.CenterEnd) { AvailablePill(cm.available) }
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Card options") }
+            DropdownMenu(menu, { menu = false }) {
+                DropdownMenuItem(text = { Text("Assign money") }, onClick = { menu = false; onAssign() })
+                DropdownMenuItem(text = { Text("Record payment") }, onClick = { menu = false; onPay() })
+                DropdownMenuItem(text = { Text("Open account") }, onClick = { menu = false; onOpen() })
+            }
+        }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }

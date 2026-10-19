@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.z.imab.model.BudgetData
 import com.z.imab.model.Money
+import com.z.imab.model.PREEXISTING_DEBT
 import com.z.imab.model.READY_TO_ASSIGN
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -92,11 +93,13 @@ fun amountColor(cents: Long): Color = when {
 
 private fun Color.luminanceIsDark() = (red * 0.299f + green * 0.587f + blue * 0.114f) < 0.5f
 
-/** Rounded "available" pill: green when funded, red when overspent. */
+/** Rounded "available" pill: green when funded, red when overspent in cash, amber when overspent on credit. */
 @Composable
-fun AvailablePill(cents: Long, modifier: Modifier = Modifier) {
+fun AvailablePill(cents: Long, modifier: Modifier = Modifier, creditOverspending: Boolean = false) {
     val (bg, fg) = when {
         cents > 0 -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        // Overspent on a credit card: becomes card debt instead of coming out of next month.
+        cents < 0 && creditOverspending -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         cents < 0 -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
         else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -179,6 +182,10 @@ fun categoryOptions(data: BudgetData, excludeAccountId: String?, allowTransfers:
         PickerOption("", "Inflow", isHeader = true),
         PickerOption(Choice.category(READY_TO_ASSIGN), "Ready to Assign"),
     )
+    if (data.isCreditAccount(excludeAccountId)) {
+        out += PickerOption("", "Credit card", isHeader = true)
+        out += PickerOption(Choice.category(PREEXISTING_DEBT), "Pre-existing debt (not budgeted)")
+    }
     for (g in data.sortedGroups) {
         val cats = data.categoriesIn(g.id)
         if (cats.isEmpty()) continue

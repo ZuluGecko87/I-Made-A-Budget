@@ -6,6 +6,17 @@ import kotlinx.serialization.Serializable
 /** Category id used for inflows that go straight to "Ready to Assign". */
 const val READY_TO_ASSIGN = "rta"
 
+/**
+ * Category for debt a credit account already had when it was added. It sits outside the budget:
+ * you pay it down by assigning money to the card's payment category.
+ */
+const val PREEXISTING_DEBT = "debt"
+
+/** Every on-budget credit account has a virtual payment category with this id prefix + account id. */
+const val CC_PAYMENT_PREFIX = "ccpay:"
+
+fun paymentCategoryId(accountId: String) = CC_PAYMENT_PREFIX + accountId
+
 @Serializable
 enum class AccountType(val label: String) {
     CHECKING("Checking"),
@@ -16,6 +27,10 @@ enum class AccountType(val label: String) {
     LOAN("Loan"),
     INVESTMENT("Investment"),
     OTHER("Other"),
+    ;
+
+    /** Credit accounts get a payment category, and spending on them moves money into it. */
+    val isCredit: Boolean get() = this == CREDIT_CARD || this == LINE_OF_CREDIT
 }
 
 @Serializable

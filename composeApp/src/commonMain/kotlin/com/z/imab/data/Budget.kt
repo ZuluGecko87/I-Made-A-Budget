@@ -9,6 +9,7 @@ import com.z.imab.model.Assignment
 import com.z.imab.model.BudgetData
 import com.z.imab.model.Category
 import com.z.imab.model.CategoryGroup
+import com.z.imab.model.PREEXISTING_DEBT
 import com.z.imab.model.READY_TO_ASSIGN
 import com.z.imab.model.ScheduledTransaction
 import com.z.imab.model.Transaction
@@ -192,7 +193,11 @@ class Budget(
                     date = startDate,
                     amount = startingBalance,
                     payee = "Starting Balance",
-                    categoryId = if (account.onBudget) READY_TO_ASSIGN else null,
+                    categoryId = when {
+                        !account.onBudget -> null
+                        account.type.isCredit && startingBalance < 0 -> PREEXISTING_DEBT
+                        else -> READY_TO_ASSIGN
+                    },
                     cleared = true,
                 )
             )
