@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -254,4 +255,54 @@ private fun MonthlyPreview(s: GoalStatus, month: YearMonth) {
             if (s.spent > 0) Text("Spent so far: ${Money.format(s.spent)}", style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+/** Fills underfunded category goals from Ready to Assign, after showing what each will get. */
+@Composable
+fun FundGoalsDialog(data: com.z.imab.model.BudgetData, board: com.z.imab.budget.GoalBoard, budget: com.z.imab.data.Budget, onDismiss: () -> Unit) {
+    val month = board.month
+    val needs = board.needs()
+    val available = com.z.imab.budget.BudgetMath.freeToAssign(data, month, YearMonth.of(today()))
+    val plan = GoalMath.fundingPlan(needs, available)
+    val assignedNow = needs.associate { it.categoryId to it.assigned }
+    val total = plan.entries.sumOf { (id, v) -> v - (assignedNow[id] ?: 0) }
+    val short = needs.sumOf { maxOf(0, it.wanted - it.assigned) } - total
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Fund goals for ${month.label}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "Monthly spending goals are funded first, then savings goals, using only what's in Ready to Assign (${Money.format(available)}).",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (plan.isEmpty()) Text("Nothing to fund.")
+                plan.forEach { (id, newAssigned) ->
+                    Row {
+                        Text(data.categoryName(id), Modifier.weight(1f))
+                        Text("+${Money.format(newAssigned - (assignedNow[id] ?: 0))}")
+                    }
+                }
+                HorizontalDivider()
+                Row {
+                    Text("Total", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                    Text(Money.format(total), fontWeight = FontWeight.SemiBold)
+                }
+                if (short > 0) {
+                    Text(
+                        "${Money.format(short)} of what your goals want can't be funded — that's more than you have to assign.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = plan.isNotEmpty(), onClick = {
+                plan.forEach { (id, v) -> budget.setAssigned(month, id, v) }
+                onDismiss()
+            }) { Text("Assign ${Money.format(total)}") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

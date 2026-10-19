@@ -112,6 +112,8 @@ class ScreenshotTest {
         nav.go(Screen.Settings); shot("settings-wide", 1800, 1000)
         nav.go(Screen.Budget); shot("budget-goals-wide", 1800, 2700)
         nav.go(Screen.Accounts); shot("accounts-wide", 1800, 900)
+        b.saveCombinedGoal(com.z.imab.model.CombinedGoal("house", "House", listOf("seed-emergency-fund", "seed-car-replacement", "seed-vacation"), 2_500_000, targetDate = month.plus(24).firstDay))
+        nav.go(Screen.Goals); shot("goals-wide", 1800, 1500); shot("goals-phone", 620, 1600)
 
         // Dropping a bank file on Everyday Checking: first import into it.
         val qbo = PickedFile("Checking_Oct.qbo", Samples.QBO_CHECKING)
@@ -139,7 +141,7 @@ class ScreenshotTest {
 
         // Mortgage: a loan account with terms, then a monthly payment arriving from the bank.
         b.saveAccount(
-            Account("home", "Home Loan", AccountType.LOAN, onBudget = false, loan = com.z.imab.model.LoanTerms(6.0, 40000, 250000)),
+            Account("home", "Home Loan", AccountType.LOAN, onBudget = false, loan = com.z.imab.model.LoanTerms(6.0, 40000, 250000, extraPrincipal = 50000)),
             -30_000_000, month.firstDay.minus(1, DateTimeUnit.DAY),
         )
         val mortgageQbo = PickedFile(

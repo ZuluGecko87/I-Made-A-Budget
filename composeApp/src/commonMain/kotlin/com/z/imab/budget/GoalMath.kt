@@ -1,6 +1,9 @@
 package com.z.imab.budget
 
+import com.z.imab.model.BudgetData
+import com.z.imab.model.Category
 import com.z.imab.model.CategoryGoal
+import com.z.imab.model.CombinedGoal
 import com.z.imab.model.GoalType
 import com.z.imab.model.YearMonth
 
@@ -128,4 +131,32 @@ object GoalMath {
     fun monthsBetween(from: YearMonth, to: YearMonth): Int = (to.year - from.year) * 12 + (to.month - from.month)
 
     private fun ceilDiv(a: Long, b: Long): Long = if (a <= 0) 0 else (a + b - 1) / b
+}
+
+/**
+ * Goal statuses for one month: computes the month and the two before it once (for the recent
+ * pace), and works out category goals, combined goals and what funding them would take.
+ */
+class GoalBoard(val data: BudgetData, val month: YearMonth) {
+    private val months = listOf(month - 2, month - 1, month).map { BudgetMath.compute(data, it) }
+    val current: MonthBudget get() = months.last()
+
+    fun history(categoryId: String): List<CategoryMonth> = months.map { it.category(categoryId) }
+
+    fun status(c: Category): GoalStatus? = c.goal?.let { GoalMath.status(it, month, history(c.id)) }
+
+    /** A combined goal is a savings goal over the total of its categories. */
+    fun status(g: CombinedGoal): GoalStatus {
+        val summed = months.map { mb ->
+            g.categoryIds.map { mb.category(it) }.fold(CategoryMonth()) { a, b ->
+                CategoryMonth(a.assigned + b.assigned, a.activity + b.activity, a.available + b.available)
+            }
+        }
+        return GoalMath.status(CategoryGoal(g.target, g.targetDate, g.monthly), month, summed)
+    }
+
+    /** Each category goal's request for this month, for "Fund goals". */
+    fun needs(): List<GoalNeed> = data.categories.values.sortedBy { it.name }.mapNotNull { c ->
+        status(c)?.let { GoalNeed(c.id, current.category(c.id).assigned, it.assignThisMonth, it.isMonthly) }
+    }
 }

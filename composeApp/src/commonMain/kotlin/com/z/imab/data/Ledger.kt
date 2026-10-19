@@ -5,6 +5,7 @@ import com.z.imab.model.Assignment
 import com.z.imab.model.BudgetData
 import com.z.imab.model.Category
 import com.z.imab.model.CategoryGroup
+import com.z.imab.model.CombinedGoal
 import com.z.imab.model.PayeeRule
 import com.z.imab.model.ScheduledTransaction
 import com.z.imab.model.Transaction
@@ -55,6 +56,7 @@ object Kinds {
     const val SCHEDULED = "sched"
     const val ASSIGNMENT = "assign"
     const val RULE = "rule"
+    const val COMBINED_GOAL = "cgoal"
 
     fun key(kind: String, id: String) = "$kind/$id"
 }
@@ -123,10 +125,11 @@ class DataBuilder {
     val scheduled = HashMap<String, ScheduledTransaction>()
     val assignments = HashMap<String, Assignment>()
     val rules = HashMap<String, PayeeRule>()
+    val combinedGoals = HashMap<String, CombinedGoal>()
 
     fun clear() {
         accounts.clear(); groups.clear(); categories.clear()
-        transactions.clear(); scheduled.clear(); assignments.clear(); rules.clear()
+        transactions.clear(); scheduled.clear(); assignments.clear(); rules.clear(); combinedGoals.clear()
     }
 
     fun apply(op: Op) {
@@ -142,6 +145,7 @@ class DataBuilder {
             Kinds.SCHEDULED -> set(scheduled, id, op.data, ScheduledTransaction.serializer())
             Kinds.ASSIGNMENT -> set(assignments, id, op.data, Assignment.serializer())
             Kinds.RULE -> set(rules, id, op.data, PayeeRule.serializer())
+            Kinds.COMBINED_GOAL -> set(combinedGoals, id, op.data, CombinedGoal.serializer())
         }
     }
 
@@ -164,5 +168,6 @@ class DataBuilder {
         scheduled = scheduled.toMap(),
         assignments = assignments.toMap(),
         rules = rules.toMap(),
+        combinedGoals = combinedGoals.toMap(),
     )
 }

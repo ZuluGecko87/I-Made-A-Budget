@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.z.imab.budget.BudgetMath
 import com.z.imab.budget.CardPayment
+import com.z.imab.budget.GoalBoard
 import com.z.imab.budget.GoalMath
 import com.z.imab.budget.GoalNeed
 import com.z.imab.budget.GoalStatus
@@ -107,11 +108,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             if (mb.overspentCount > 0) {
                 AssistChip(onClick = {}, label = { Text("${mb.overspentCount} overspent categor${if (mb.overspentCount == 1) "y" else "ies"}") })
             }
-            val needs = remember(data, month) {
-                data.categories.values.mapNotNull { c ->
-                    goalStatus(c)?.let { GoalNeed(c.id, mb.category(c.id).assigned, it.assignThisMonth, it.isMonthly) }
-                }
-            }
+            val needs = remember(data, month) { GoalBoard(data, month).needs() }
             val stillNeeded = needs.sumOf { maxOf(0, it.wanted - it.assigned) }
             if (stillNeeded > 0) {
                 val canFund = minOf(stillNeeded, BudgetMath.freeToAssign(data, month, YearMonth.of(today())))
@@ -206,47 +203,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
         )
     }
     if (fundingGoals) {
-        val needs = data.categories.values.mapNotNull { c ->
-            goalStatus(c)?.let { GoalNeed(c.id, mb.category(c.id).assigned, it.assignThisMonth, it.isMonthly) }
-        }.sortedBy { data.categories.getValue(it.categoryId).name }
-        val available = BudgetMath.freeToAssign(data, month, YearMonth.of(today()))
-        val plan = GoalMath.fundingPlan(needs, available)
-        val total = plan.entries.sumOf { (id, v) -> v - mb.category(id).assigned }
-        val short = needs.sumOf { maxOf(0, it.wanted - it.assigned) } - total
-        AlertDialog(
-            onDismissRequest = { fundingGoals = false },
-            title = { Text("Fund goals for ${month.label}") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Monthly spending goals are funded first, then savings goals, using only what's in Ready to Assign.", style = MaterialTheme.typography.bodySmall)
-                    plan.forEach { (id, newAssigned) ->
-                        Row {
-                            Text(data.categoryName(id), Modifier.weight(1f))
-                            Text("+${Money.format(newAssigned - mb.category(id).assigned)}")
-                        }
-                    }
-                    HorizontalDivider()
-                    Row {
-                        Text("Total", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                        Text(Money.format(total), fontWeight = FontWeight.SemiBold)
-                    }
-                    if (short > 0) {
-                        Text(
-                            "${Money.format(short)} of what your goals want can't be funded — that's more than you have to assign.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.tertiary,
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(enabled = plan.isNotEmpty(), onClick = {
-                    plan.forEach { (id, v) -> store.budget.setAssigned(month, id, v) }
-                    fundingGoals = false
-                }) { Text("Assign ${Money.format(total)}") }
-            },
-            dismissButton = { TextButton(onClick = { fundingGoals = false }) { Text("Cancel") } },
-        )
+        FundGoalsDialog(data, GoalBoard(data, month), store.budget) { fundingGoals = false }
     }
     editingGoal?.let { c ->
         GoalDialog(

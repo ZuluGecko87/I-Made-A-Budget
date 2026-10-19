@@ -15,6 +15,7 @@ import com.z.imab.model.Assignment
 import com.z.imab.model.BudgetData
 import com.z.imab.model.Category
 import com.z.imab.model.CategoryGroup
+import com.z.imab.model.CombinedGoal
 import com.z.imab.model.PREEXISTING_DEBT
 import com.z.imab.model.READY_TO_ASSIGN
 import com.z.imab.model.ScheduledTransaction
@@ -330,8 +331,15 @@ class Budget(
         d.assignments.values.filter { it.categoryId == id }.forEach { remove(Kinds.ASSIGNMENT, it.key) }
         d.transactions.values.filter { it.categoryId == id }.forEach { putTxn(it.copy(categoryId = null)) }
         d.scheduled.values.filter { it.categoryId == id }.forEach { putScheduled(it.copy(categoryId = null)) }
+        d.combinedGoals.values.filter { id in it.categoryIds }.forEach {
+            put(Kinds.COMBINED_GOAL, it.id, it.copy(categoryIds = it.categoryIds - id), CombinedGoal.serializer())
+        }
         remove(Kinds.CATEGORY, id)
     }
+
+    fun saveCombinedGoal(g: CombinedGoal) = edit { put(Kinds.COMBINED_GOAL, g.id, g, CombinedGoal.serializer()) }
+
+    fun deleteCombinedGoal(id: String) = edit { remove(Kinds.COMBINED_GOAL, id) }
 
     fun setAssigned(month: YearMonth, categoryId: String, amount: Long) = edit {
         val a = Assignment(month.toString(), categoryId, amount)

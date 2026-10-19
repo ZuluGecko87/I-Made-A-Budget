@@ -66,6 +66,7 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
         item {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Accounts", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = { nav.importInto(null) }, modifier = Modifier.padding(end = 8.dp)) { Text("Import") }
                 Button(onClick = { adding = true }) {
                     Icon(Icons.Default.Add, null)
                     Text("Add account")

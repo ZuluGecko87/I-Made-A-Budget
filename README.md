@@ -23,6 +23,9 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
     the category. With *roll over* on, leftovers carry into next month and count toward it; off,
     they go back to Ready to Assign at month end.
   - *Fund goals* fills underfunded goals from Ready to Assign (monthly spending first, then savings).
+  - *Across categories*: one savings target for several categories together (e.g. House over Down
+    Payment + Closing Costs), with the monthly amount needed and an estimated finish.
+  - The **Goals** tab lists them all and is where you add them; Import is on the Accounts page.
 - **You can't assign more than you have**: assigning is capped at what's in Ready to Assign
   (lowering an amount is always allowed).
 - Tap a category's name to rename it, move it to another group, or set its goal; tap its numbers to assign money.
@@ -51,7 +54,7 @@ payment on Home Loan). Each payment is split:
 The whole payment is still budgeted from its category. Payments are recalculated in date order
 whenever one is added, edited or removed; changed loan terms apply from the current month. The
 loan screen shows principal left, principal and interest paid so far, the last payment's split, and
-an estimated payoff date with the interest still to pay.
+an estimated payoff date with the interest still to pay. Set *Extra toward principal each month* to compare payoff with and without the extra — how much sooner, and how much interest it saves.
 
 ## Credit cards
 

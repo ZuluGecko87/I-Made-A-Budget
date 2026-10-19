@@ -299,11 +299,16 @@ fun AccountDialog(
     var rateText by remember { mutableStateOf(initial?.loan?.annualRatePct?.toString().orEmpty()) }
     var escrowText by remember { mutableStateOf(initial?.loan?.monthlyEscrow?.takeIf { it > 0 }?.let(Money::toInput).orEmpty()) }
     var paymentText by remember { mutableStateOf(initial?.loan?.monthlyPayment?.let(Money::toInput).orEmpty()) }
+    var extraText by remember { mutableStateOf(initial?.loan?.extraPrincipal?.takeIf { it > 0 }?.let(Money::toInput).orEmpty()) }
+    val extra = if (extraText.isBlank()) 0L else Money.parse(extraText)
     val rate = rateText.trim().removeSuffix("%").toDoubleOrNull()?.takeIf { it in 0.0..100.0 }
     val escrow = if (escrowText.isBlank()) 0L else Money.parse(escrowText)
     val payment = if (paymentText.isBlank()) null else Money.parse(paymentText)
-    val loanValid = !isLoan || rateText.isBlank() || (rate != null && escrow != null && (paymentText.isBlank() || payment != null))
-    val loanTerms = if (isLoan && rate != null && escrow != null) LoanTerms(rate, kotlin.math.abs(escrow), payment?.let { kotlin.math.abs(it) }) else null
+    val loanValid = !isLoan || rateText.isBlank() ||
+        (rate != null && escrow != null && extra != null && (paymentText.isBlank() || payment != null))
+    val loanTerms = if (isLoan && rate != null && escrow != null) {
+        LoanTerms(rate, kotlin.math.abs(escrow), payment?.let { kotlin.math.abs(it) }, kotlin.math.abs(extra ?: 0))
+    } else null
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -360,6 +365,11 @@ fun AccountDialog(
                     )
                     MoneyField("Monthly escrow (taxes & insurance)", escrowText, { escrowText = it }, Modifier.fillMaxWidth(), isError = escrow == null)
                     MoneyField("Usual monthly payment incl. escrow (optional)", paymentText, { paymentText = it }, Modifier.fillMaxWidth(), isError = paymentText.isNotBlank() && payment == null)
+                    MoneyField("Extra toward principal each month (optional)", extraText, { extraText = it }, Modifier.fillMaxWidth(), isError = extra == null)
+                    Text(
+                        "Used for the payoff estimate: the loan screen compares paying it off with and without the extra.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                     if (initial?.loan != null) {
                         Text("Changes to the rate or escrow apply to payments from this month on.", style = MaterialTheme.typography.bodySmall)
                     }

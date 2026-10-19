@@ -13,7 +13,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -181,7 +183,12 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Import bank file", style = MaterialTheme.typography.headlineSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { nav.importAccountId?.let(nav::openAccount) ?: nav.go(Screen.Accounts) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                    Text("Import bank file", style = MaterialTheme.typography.headlineSmall)
+                }
                 Text(
                     "Download transactions from your bank as QuickBooks (.qbo) — Quicken (.qfx) and OFX (.ofx) work too. " +
                         "Transactions already in your budget are ignored as duplicates; ones you entered by hand " +

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -52,11 +53,13 @@ import com.z.imab.data.BudgetStore
 import com.z.imab.data.SyncStatus
 import com.z.imab.platform.Pickers
 
-enum class Screen(val label: String, val icon: ImageVector) {
+/** [inNav] screens get a tab; Import is opened from Accounts (or by dropping a file). */
+enum class Screen(val label: String, val icon: ImageVector, val inNav: Boolean = true) {
     Budget("Budget", Icons.Default.Home),
     Accounts("Accounts", Icons.Default.AccountBox),
+    Goals("Goals", Icons.Default.Star),
     Scheduled("Scheduled", Icons.Default.DateRange),
-    Import("Import", Icons.Default.Refresh),
+    Import("Import", Icons.Default.Refresh, inNav = false),
     Settings("Settings", Icons.Default.Settings),
 }
 
@@ -108,6 +111,10 @@ class NavState {
     fun back(): Boolean {
         if (screen == Screen.Accounts && accountId != null) {
             accountId = null
+            return true
+        }
+        if (screen == Screen.Import) {
+            importAccountId?.let(::openAccount) ?: go(Screen.Accounts)
             return true
         }
         if (screen != Screen.Budget) {
@@ -186,9 +193,9 @@ private fun MainLayout(store: BudgetStore, pickers: Pickers, nav: NavState) {
         if (wide) {
             Row(Modifier.fillMaxSize()) {
                 NavigationRail(header = { RailHeader(store) }) {
-                    Screen.entries.forEach { s ->
+                    Screen.entries.filter { it.inNav }.forEach { s ->
                         NavigationRailItem(
-                            selected = nav.screen == s,
+                            selected = nav.screen == s || (s == Screen.Accounts && nav.screen == Screen.Import),
                             onClick = { nav.go(s) },
                             icon = { Icon(s.icon, s.label) },
                             label = { Text(s.label) },
@@ -202,9 +209,9 @@ private fun MainLayout(store: BudgetStore, pickers: Pickers, nav: NavState) {
             Scaffold(
                 bottomBar = {
                     NavigationBar {
-                        Screen.entries.forEach { s ->
+                        Screen.entries.filter { it.inNav }.forEach { s ->
                             NavigationBarItem(
-                                selected = nav.screen == s,
+                                selected = nav.screen == s || (s == Screen.Accounts && nav.screen == Screen.Import),
                                 onClick = { nav.go(s) },
                                 icon = { Icon(s.icon, s.label) },
                                 label = { Text(s.label, maxLines = 1) },
@@ -240,6 +247,7 @@ private fun Content(store: BudgetStore, pickers: Pickers, nav: NavState, wide: B
             val id = nav.accountId
             if (id == null) AccountsScreen(store, nav) else RegisterScreen(store, nav, id, wide, pickers.supportsFileDrop)
         }
+        Screen.Goals -> GoalsScreen(store)
         Screen.Scheduled -> ScheduledScreen(store, wide)
         Screen.Import -> ImportScreen(store, pickers, nav)
         Screen.Settings -> SettingsScreen(store, pickers)

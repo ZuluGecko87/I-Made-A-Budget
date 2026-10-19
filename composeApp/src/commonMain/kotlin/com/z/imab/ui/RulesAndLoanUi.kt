@@ -153,6 +153,7 @@ fun LoanSummary(account: Account, data: BudgetData, onEdit: () -> Unit) {
                 Stat("Principal left", Money.format(owed))
                 Stat("Rate", "${terms.annualRatePct}%")
                 Stat("Escrow", "${Money.format(terms.monthlyEscrow)}/mo")
+                if (terms.extraPrincipal > 0) Stat("Extra principal", "${Money.format(terms.extraPrincipal)}/mo")
                 Stat("Paid toward principal", Money.format(payments.sumOf { it.loanSplit!!.principal }))
                 Stat("Interest paid", Money.format(payments.sumOf { it.loanSplit!!.interest }))
             }
@@ -163,22 +164,64 @@ fun LoanSummary(account: Account, data: BudgetData, onEdit: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            val monthly = terms.monthlyPayment ?: last?.let { -it.amount }
-            val pi = monthly?.minus(terms.monthlyEscrow)
-            val payoff = pi?.let { LoanMath.payoff(owed, terms.annualRatePct, it) }
+            PayoffEstimate(owed, terms, lastPayment = last?.let { -it.amount })
+        }
+    }
+}
+
+/**
+ * Payoff date and remaining interest at the usual payment, and with the extra principal if one is
+ * set. Without a usual payment it uses the last linked payment as the whole monthly amount.
+ */
+@Composable
+private fun PayoffEstimate(owed: Long, terms: com.z.imab.model.LoanTerms, lastPayment: Long?) {
+    if (owed == 0L) {
+        Text("Paid off!", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+        return
+    }
+    val base = terms.monthlyPayment ?: lastPayment
+    if (base == null) {
+        Text(
+            "Set a usual monthly payment (or link a payment) to estimate the payoff date.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        return
+    }
+    val pi = base - terms.monthlyEscrow
+    // With only a past payment to go on, it may already include the extra, so don't add it twice.
+    val extra = if (terms.monthlyPayment != null) terms.extraPrincipal else 0
+    val without = LoanMath.payoff(owed, terms.annualRatePct, pi)
+    val with = if (extra > 0) LoanMath.payoff(owed, terms.annualRatePct, pi + extra) else null
+    val now = YearMonth.of(today())
+    fun line(label: String, p: com.z.imab.budget.LoanPayoff?, monthly: Long) =
+        if (p == null) "$label: ${Money.format(monthly)}/month doesn't cover the interest, so it wouldn't be paid off."
+        else "$label: paid off ${(now + p.months).label} (${p.months / 12} yr ${p.months % 12} mo) · ${Money.format(p.totalInterest)} more interest"
+
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            line(if (terms.monthlyPayment != null) "At ${Money.format(base)}/month" else "At your last payment (${Money.format(base)})", without, base),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (with == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (with != null) {
             Text(
-                when {
-                    owed == 0L -> "Paid off!"
-                    pi == null -> "Link a payment or set a usual monthly payment to estimate the payoff date."
-                    payoff == null -> "A ${Money.format(monthly)} payment doesn't cover the monthly interest, so the loan wouldn't be paid off."
-                    else -> {
-                        val end = YearMonth.of(today()) + payoff.months
-                        "At ${Money.format(monthly)}/month: paid off around ${end.label} " +
-                            "(${payoff.months / 12} yr ${payoff.months % 12} mo), with ${Money.format(payoff.totalInterest)} more interest."
-                    }
-                },
+                line("With ${Money.format(extra)} extra toward principal", with, base + extra),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (without != null) {
+                val months = without.months - with.months
+                Text(
+                    "The extra saves ${months / 12} yr ${months % 12} mo and ${Money.format(without.totalInterest - with.totalInterest)} in interest.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        } else if (terms.monthlyPayment == null && terms.extraPrincipal > 0) {
+            Text(
+                "Set the usual monthly payment to compare with and without the extra ${Money.format(terms.extraPrincipal)}.",
+                style = MaterialTheme.typography.bodySmall,
             )
         }
     }

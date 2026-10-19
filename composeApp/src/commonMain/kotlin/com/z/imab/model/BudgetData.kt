@@ -9,6 +9,7 @@ data class BudgetData(
     val scheduled: Map<String, ScheduledTransaction> = emptyMap(),
     val assignments: Map<String, Assignment> = emptyMap(),
     val rules: Map<String, PayeeRule> = emptyMap(),
+    val combinedGoals: Map<String, CombinedGoal> = emptyMap(),
 ) {
     /** Loan accounts with terms set, which payments can be linked to. */
     val loanAccounts: List<Account> by lazy { sortedAccounts.filter { it.loan != null && !it.closed } }

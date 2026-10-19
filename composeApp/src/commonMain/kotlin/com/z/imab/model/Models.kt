@@ -65,6 +65,22 @@ data class LoanTerms(
     val monthlyEscrow: Long = 0,
     /** Usual total monthly payment including escrow, for the payoff estimate (optional). */
     val monthlyPayment: Long? = null,
+    /** Extra paid toward principal each month on top of the usual payment, for the payoff estimate. */
+    val extraPrincipal: Long = 0,
+)
+
+/**
+ * A savings goal spanning several categories, e.g. "House" over Down Payment + Closing Costs.
+ * Progress is the money in all of them together.
+ */
+@Serializable
+data class CombinedGoal(
+    val id: String,
+    val name: String,
+    val categoryIds: List<String>,
+    val target: Long,
+    val targetDate: LocalDate? = null,
+    val monthly: Long? = null,
 )
 
 /** How a loan payment was divided. Stored on the payment; the principal also appears in the loan account. */
