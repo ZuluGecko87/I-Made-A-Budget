@@ -353,6 +353,22 @@ class Budget(
 
     fun deleteCombinedGoal(id: String) = edit { remove(Kinds.COMBINED_GOAL, id) }
 
+    /**
+     * Moves [amount] of available money in [month] from one category to another. A null category
+     * means Ready to Assign. Both assignments change in one edit, so they sync together.
+     */
+    fun moveMoney(month: YearMonth, fromCategoryId: String?, toCategoryId: String?, amount: Long) = edit {
+        if (amount <= 0 || fromCategoryId == toCategoryId) return@edit
+        fun adjust(categoryId: String, delta: Long) {
+            val key = Assignment(month.toString(), categoryId, 0).key
+            val now = d.assignments[key]?.amount ?: 0
+            val a = Assignment(month.toString(), categoryId, now + delta)
+            if (a.amount == 0L) remove(Kinds.ASSIGNMENT, key) else put(Kinds.ASSIGNMENT, key, a, Assignment.serializer())
+        }
+        fromCategoryId?.let { adjust(it, -amount) }
+        toCategoryId?.let { adjust(it, amount) }
+    }
+
     fun setAssigned(month: YearMonth, categoryId: String, amount: Long) = edit {
         val a = Assignment(month.toString(), categoryId, amount)
         if (amount == 0L) remove(Kinds.ASSIGNMENT, a.key) else put(Kinds.ASSIGNMENT, a.key, a, Assignment.serializer())

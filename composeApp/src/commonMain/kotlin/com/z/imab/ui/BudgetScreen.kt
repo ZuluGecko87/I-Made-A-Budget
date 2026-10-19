@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import com.z.imab.budget.BudgetMath
 import com.z.imab.budget.CardPayment
 import com.z.imab.budget.GoalBoard
+import com.z.imab.budget.MonthBudget
 import com.z.imab.budget.GoalMath
 import com.z.imab.budget.GoalNeed
 import com.z.imab.budget.GoalStatus
@@ -79,6 +80,8 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
     var editingGoal by remember { mutableStateOf<Category?>(null) }
     var fundingGoals by remember { mutableStateOf(false) }
     var showingActivity by remember { mutableStateOf<Category?>(null) }
+    /** Category whose available amount was clicked, to cover overspending or move money. */
+    var moving by remember { mutableStateOf<String?>(null) }
     var editingTxn by remember { mutableStateOf<Transaction?>(null) }
 
     /** Category id and display name being assigned to (regular or credit card payment). */
@@ -152,6 +155,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         onAssign = { assigning = card.categoryId to data.categoryName(card.categoryId) },
                         onPay = { paying = paymentTemplate(data, card.accountId, card.available, store.budget.newId()) },
                         onOpen = { nav.openAccount(card.accountId) },
+                        onAvailable = { moving = card.categoryId },
                     )
                 }
             }
@@ -178,6 +182,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         goal = goalStatus(c),
                         onGoal = { editingGoal = c },
                         onActivity = { showingActivity = c },
+                        onAvailable = { moving = c.id },
                     )
                 }
             }
@@ -207,6 +212,16 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                 if (amount != mb.category(id).assigned) store.budget.setAssigned(month, id, amount)
                 assigning = null
             },
+        )
+    }
+    moving?.let { id ->
+        MoveMoneyDialog(
+            data = data,
+            mb = mb,
+            categoryId = id,
+            free = BudgetMath.freeToAssign(data, month, YearMonth.of(today())),
+            onMove = { from, to, amount -> store.budget.moveMoney(month, from, to, amount); moving = null },
+            onDismiss = { moving = null },
         )
     }
     showingActivity?.let { c ->
@@ -354,6 +369,7 @@ private fun CategoryRow(
     goal: GoalStatus?,
     onGoal: () -> Unit,
     onActivity: () -> Unit,
+    onAvailable: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -384,8 +400,13 @@ private fun CategoryRow(
             color = if (cm.assigned == 0L) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
         )
         if (wide) Text(Money.format(cm.activity), Modifier.width(120.dp), textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // Clicking the available amount covers overspending or moves money.
         Box(Modifier.width(if (wide) 130.dp else 105.dp), contentAlignment = Alignment.CenterEnd) {
-            AvailablePill(cm.available, creditOverspending = cm.creditOverspent > 0 && cm.cashOverspent == 0L)
+            AvailablePill(
+                cm.available,
+                Modifier.clickable(onClick = onAvailable),
+                creditOverspending = cm.creditOverspent > 0 && cm.cashOverspent == 0L,
+            )
         }
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Category options") }
@@ -540,6 +561,7 @@ private fun CardPaymentRow(
     onAssign: () -> Unit,
     onPay: () -> Unit,
     onOpen: () -> Unit,
+    onAvailable: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -569,7 +591,9 @@ private fun CardPaymentRow(
             color = if (cm.assigned == 0L) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
         )
         if (wide) Text(Money.format(cm.activity), Modifier.width(120.dp), textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Box(Modifier.width(if (wide) 130.dp else 105.dp), contentAlignment = Alignment.CenterEnd) { AvailablePill(cm.available) }
+        Box(Modifier.width(if (wide) 130.dp else 105.dp), contentAlignment = Alignment.CenterEnd) {
+            AvailablePill(cm.available, Modifier.clickable(onClick = onAvailable))
+        }
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Card options") }
             DropdownMenu(menu, { menu = false }) {
@@ -623,5 +647,77 @@ private fun ActivityDialog(data: BudgetData, category: Category, month: YearMont
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+/**
+ * Clicking an available amount: when it's negative, cover the overspending from Ready to Assign
+ * or another category; otherwise move money from it to another category or back to Ready to Assign.
+ */
+@Composable
+private fun MoveMoneyDialog(
+    data: BudgetData,
+    mb: MonthBudget,
+    categoryId: String,
+    free: Long,
+    onMove: (from: String?, to: String?, amount: Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val cm = mb.category(categoryId)
+    val name = data.categoryName(categoryId)
+    val covering = cm.available < 0
+    val others = mb.categories.filterKeys { it != categoryId && (it in data.categories || it.startsWith(com.z.imab.model.CC_PAYMENT_PREFIX)) }
+    // Where money can come from (covering) or go to (moving). null = Ready to Assign.
+    val choices: List<PickerOption<String?>> = buildList {
+        add(PickerOption(null, "Ready to Assign — ${Money.format(free)}"))
+        val ordered = data.sortedGroups.flatMap { data.categoriesIn(it.id) }.map { it.id } + mb.cards.map { it.categoryId }
+        ordered.filter { it in others && (!covering || others.getValue(it).available > 0) }.forEach {
+            add(PickerOption(it, "${data.categoryName(it)} — ${Money.format(others.getValue(it).available)}"))
+        }
+    }
+    val needed = if (covering) -cm.available else cm.available
+    var other by remember {
+        mutableStateOf(
+            if (!covering || free >= needed) null
+            else others.filterValues { it.available > 0 }.maxByOrNull { it.value.available }?.key
+        )
+    }
+    var text by remember { mutableStateOf(Money.toInput(needed)) }
+    val amount = Money.parse(text)
+    val sourceHas = when {
+        !covering -> cm.available
+        other == null -> free
+        else -> others[other]?.available ?: 0
+    }
+    val valid = amount != null && amount > 0 && amount <= sourceHas
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (covering) "Cover overspending" else "Move money") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    if (covering) "$name is ${Money.format(needed)} overspent. Choose where the money comes from."
+                    else "$name has ${Money.format(cm.available)} available. Choose where to move it.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Picker(if (covering) "Take money from" else "Move to", choices, other, { other = it }, Modifier.fillMaxWidth())
+                MoneyField("Amount", text, { text = it }, Modifier.fillMaxWidth(), isError = text.isNotBlank() && !valid)
+                if (amount != null && amount > sourceHas) {
+                    Text(
+                        "${if (covering) data.categoryName(other).takeIf { other != null } ?: "Ready to Assign" else name} only has ${Money.format(maxOf(0, sourceHas))}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                val a = amount ?: return@TextButton
+                if (covering) onMove(other, categoryId, a) else onMove(categoryId, other, a)
+            }) { Text(if (covering) "Cover" else "Move") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
