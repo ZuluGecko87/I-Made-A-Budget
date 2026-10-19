@@ -1,0 +1,108 @@
+package com.z.imab
+
+import com.z.imab.data.BudgetStore
+import com.z.imab.data.SyncStatus
+import com.z.imab.model.Account
+import com.z.imab.model.Transaction
+import com.z.imab.platform.Storage
+import com.z.imab.platform.SyncLocation
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.LocalDate
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+/** Two devices syncing through one shared "cloud" file. */
+class SyncTest {
+    private class Cloud {
+        var main = ""
+        val copies = mutableListOf<String>()
+    }
+
+    private class DeviceStorage(val cloud: Cloud, override val defaultDeviceName: String) : Storage {
+        val local = HashMap<String, String>()
+        override suspend fun readLocal(name: String) = local[name]
+        override suspend fun writeLocal(name: String, text: String) { local[name] = text }
+        override suspend fun readSync(location: SyncLocation) = listOf(cloud.main) + cloud.copies
+        override suspend fun writeSync(location: SyncLocation, text: String) { cloud.main = text }
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    private val loc = SyncLocation("cloud", "cloud")
+
+    @AfterTest
+    fun tearDown() = scope.cancel()
+
+    private fun device(cloud: Cloud, name: String) = BudgetStore(DeviceStorage(cloud, name), scope).also {
+        runBlocking { it.start() }
+        it.connectSync(loc)
+    }
+
+    @Test
+    fun twoDevicesConverge() = runBlocking {
+        val cloud = Cloud()
+        val mac = device(cloud, "mac")
+        mac.budget.saveAccount(Account("chk", "Checking"))
+        mac.budget.saveTransaction(Transaction("t1", "chk", LocalDate(2026, 10, 1), -500, "Coffee"))
+        mac.syncNow()
+
+        val phone = device(cloud, "phone")
+        phone.syncNow()
+        assertEquals("Coffee", phone.data.value.transactions["t1"]?.payee)
+        // Default categories from both devices collapse into one set.
+        assertEquals(mac.data.value.categories.keys, phone.data.value.categories.keys)
+
+        phone.budget.saveTransaction(Transaction("t2", "chk", LocalDate(2026, 10, 2), -900, "Lunch"))
+        phone.syncNow()
+        mac.syncNow()
+        assertEquals(mac.data.value, phone.data.value)
+    }
+
+    @Test
+    fun lostOverwriteIsRepairedOnNextSync() = runBlocking {
+        val cloud = Cloud()
+        val mac = device(cloud, "mac")
+        val phone = device(cloud, "phone")
+        mac.syncNow(); phone.syncNow()
+
+        mac.budget.saveAccount(Account("a", "From Mac"))
+        phone.budget.saveAccount(Account("b", "From phone"))
+        // Both upload at nearly the same time and the cloud keeps only the Mac's version.
+        mac.syncNow()
+        val macUpload = cloud.main
+        phone.syncNow()
+        cloud.main = macUpload // the mac's version wins the race...
+        phone.syncNow() // ...and the phone puts its account back.
+        mac.syncNow()
+        assertEquals(setOf("a", "b"), mac.data.value.accounts.keys)
+        assertEquals(setOf("a", "b"), phone.data.value.accounts.keys)
+    }
+
+    @Test
+    fun conflictCopiesAreMergedIn() = runBlocking {
+        val cloud = Cloud()
+        val other = device(Cloud(), "other")
+        other.budget.saveAccount(Account("c", "Only in conflict copy"))
+        cloud.copies += other.budget.ledger.encode()
+
+        val mac = device(cloud, "mac")
+        mac.syncNow()
+        assertTrue("c" in mac.data.value.accounts)
+        assertTrue("c" in cloud.main)
+    }
+
+    @Test
+    fun neverOverwritesAFileThatIsNotIMAB() = runBlocking {
+        val cloud = Cloud().apply { main = "{\"ops\": [], \"hello\": \"my spreadsheet\"}" }
+        val mac = device(cloud, "mac")
+        mac.syncNow()
+        assertIs<SyncStatus.Failed>(mac.syncStatus.value)
+        assertEquals("{\"ops\": [], \"hello\": \"my spreadsheet\"}", cloud.main)
+    }
+}
