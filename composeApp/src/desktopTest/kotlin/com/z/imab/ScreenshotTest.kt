@@ -54,6 +54,8 @@ class ScreenshotTest {
         override suspend fun createSyncFile(): SyncLocation? = null
         override suspend fun openSyncFile(): SyncLocation? = null
         override val syncHint = "hint"
+        override suspend fun saveFile(suggestedName: String, text: String): String? = null
+        override suspend fun pickArchive(): PickedFile? = null
     }
 
     @Test
@@ -157,7 +159,7 @@ class ScreenshotTest {
         val mstmt = com.z.imab.importer.OfxParser.parse(mortgageQbo.text).single()
         b.applyImport("chk", null, com.z.imab.importer.ImportMatcher.analyze(mstmt.transactions.filter { it.fitId == "MORT10" }, "chk", b.data))
         nav.openAccount("home"); shot("loan-register-wide", 1800, 900)
-        nav.go(Screen.Settings); shot("settings-rules-wide", 1800, 1300)
+        nav.go(Screen.Settings); shot("settings-rules-wide", 1800, 3600)
 
         // The account form for a new mortgage and for editing the existing loan.
         fun dialogShot(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {

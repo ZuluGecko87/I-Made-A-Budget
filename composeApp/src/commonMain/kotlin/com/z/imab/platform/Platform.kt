@@ -29,6 +29,15 @@ interface Storage {
      * without reading it. When it changes, another device's version has arrived. Null if unknown.
      */
     suspend fun syncStamp(location: SyncLocation): String? = null
+
+    /**
+     * Saves [text] as [name] in the same folder as the sync file (e.g. an archive). Returns false
+     * where that isn't possible (Android can only write the one file it was given).
+     */
+    suspend fun writeArchive(location: SyncLocation, name: String, text: String): Boolean = false
+
+    /** Names of files in app storage starting with [prefix], newest first. */
+    suspend fun listLocal(prefix: String): List<String> = emptyList()
 }
 
 /** System file pickers; implemented per platform. */
@@ -55,4 +64,10 @@ interface Pickers {
 
     /** Brings the cloud app forward so it uploads now. Returns false if it can't be opened. */
     fun openSyncApp(location: SyncLocation): Boolean = false
+
+    /** Lets the user save [text] as a file, suggesting [suggestedName]. Returns where, or null if cancelled. */
+    suspend fun saveFile(suggestedName: String, text: String): String?
+
+    /** Lets the user choose an archived budget file to restore. */
+    suspend fun pickArchive(): PickedFile?
 }

@@ -56,6 +56,57 @@ class Budget(
         return changed
     }
 
+    /** Replaces everything with [file]: loading from disk, or switching to a newer budget from another device. */
+    fun adopt(file: LedgerFile) {
+        ledger.reset(file.budgetId, file.startedAt)
+        file.ops.forEach { ledger.merge(it) }
+        rebuild()
+    }
+
+    // ---------------------------------------------------------------- starting over
+
+    /**
+     * Starts a new budget that keeps the setup — accounts, category groups and categories (with
+     * goals), scheduled transactions, auto-categorize rules and combined goals — but no
+     * transactions or assigned money. With [keepBalances] each open account starts with its
+     * current balance (dated [today]) so the new budget begins with the money you actually have.
+     */
+    fun freshStart(keepBalances: Boolean, today: LocalDate) {
+        val old = data
+        ledger.reset(newId(), clock())
+        b.clear()
+        edit {
+            old.accounts.values.forEach { put(Kinds.ACCOUNT, it.id, it, Account.serializer()) }
+            old.groups.values.forEach { put(Kinds.GROUP, it.id, it, CategoryGroup.serializer()) }
+            old.categories.values.forEach { put(Kinds.CATEGORY, it.id, it, Category.serializer()) }
+            old.scheduled.values.forEach { putScheduled(it) }
+            old.rules.values.forEach { put(Kinds.RULE, it.id, it, PayeeRule.serializer()) }
+            old.combinedGoals.values.forEach { put(Kinds.COMBINED_GOAL, it.id, it, CombinedGoal.serializer()) }
+            if (keepBalances) {
+                old.accounts.values.filter { !it.closed }.forEach { a ->
+                    val balance = old.balance(a.id)
+                    if (balance != 0L) putTxn(startingBalanceTxn(newId(), a, balance, today))
+                }
+            }
+        }
+        rebuild()
+    }
+
+    /** Starts a brand-new, empty budget with the default categories, as on a new install. */
+    fun startFromScratch() {
+        ledger.reset(newId(), clock())
+        b.clear()
+        seedDefaults()
+        rebuild()
+    }
+
+    /** Brings back an archived budget as the current one (as a new budget, so other devices switch to it). */
+    fun restore(file: LedgerFile) {
+        ledger.reset(newId(), clock())
+        file.ops.forEach { ledger.merge(it) }
+        rebuild()
+    }
+
     private fun rebuild() {
         b.clear()
         ledger.all().forEach(b::apply)

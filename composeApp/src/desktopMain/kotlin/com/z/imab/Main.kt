@@ -28,6 +28,8 @@ fun main() = application {
     val pickers = remember { DesktopPickers() }
     val nav = remember { NavState() }
     LaunchedEffect(Unit) { store.start() }
+    // Archives are saved next to the sync file, so the restore picker opens there.
+    LaunchedEffect(Unit) { store.settings.collect { s -> pickers.lastSyncFolder = s.syncId?.let { java.io.File(it).parent } } }
 
     Window(
         onCloseRequest = {

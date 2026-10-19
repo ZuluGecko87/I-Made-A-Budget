@@ -120,6 +120,22 @@ and pick that same file.
   Some of these apps don't cut a file to its new length when it's overwritten; IMAB trims it itself,
   ignores leftovers when reading, and rewrites such a file clean.
 
+## Starting over
+
+Settings → **Start over**:
+
+- **Fresh start** keeps accounts, category groups and categories (with goals), scheduled
+  transactions, rules and combined goals, and removes all transactions and assigned money.
+  By default each account starts the new budget with its current balance.
+- **Start from scratch** removes everything and starts with the default categories.
+- **Restore from archive** brings back an archived budget (archiving the current one first).
+
+Both first sync, then save the whole budget as `<sync file> archive YYYY-MM-DD HHMM.json` next to
+the sync file (on Android, where apps can't add files next to it, a save dialog opens) and in app
+storage. Each budget has an id and start time in the sync file: a device holding an older budget
+switches to the newer one (keeping a local copy of what it had) instead of merging the old data
+back in, and a device whose own budget is newer archives the old cloud file before replacing it.
+
 ## Build
 
 Requires JDK 17 and the Android SDK (`local.properties` → `sdk.dir`).

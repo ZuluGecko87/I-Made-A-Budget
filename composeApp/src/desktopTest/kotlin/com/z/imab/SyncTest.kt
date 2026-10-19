@@ -25,6 +25,7 @@ class SyncTest {
         var main = ""
             set(value) { field = value; version++ }
         val copies = mutableListOf<String>()
+        val archives = LinkedHashMap<String, String>()
         var version = 0
         var writes = 0
     }
@@ -36,6 +37,8 @@ class SyncTest {
         override suspend fun readSync(location: SyncLocation) = listOf(cloud.main) + cloud.copies
         override suspend fun writeSync(location: SyncLocation, text: String) { cloud.main = text; cloud.writes++ }
         override suspend fun syncStamp(location: SyncLocation) = "v${cloud.version}"
+        override suspend fun writeArchive(location: SyncLocation, name: String, text: String): Boolean { cloud.archives[name] = text; return true }
+        override suspend fun listLocal(prefix: String) = local.keys.filter { it.startsWith(prefix) }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
@@ -160,6 +163,79 @@ class SyncTest {
         val writes = cloud.writes
         mac.syncNow(forceWrite = true)
         assertEquals(writes + 1, cloud.writes)
+    }
+
+    /** Mac and phone sharing a budget with an account, a category assignment and a transaction. */
+    private suspend fun sharedBudget(cloud: Cloud): Pair<BudgetStore, BudgetStore> {
+        val mac = device(cloud, "mac")
+        val phone = device(cloud, "phone")
+        mac.budget.saveAccount(Account("chk", "Checking"), 100000, LocalDate(2026, 9, 30))
+        mac.budget.setAssigned(com.z.imab.model.YearMonth(2026, 10), "seed-groceries", 20000)
+        mac.budget.saveTransaction(Transaction("t1", "chk", LocalDate(2026, 10, 2), -4500, "Kroger", categoryId = "seed-groceries"))
+        mac.budget.saveCategory(mac.data.value.categories.getValue("seed-gifts").copy(name = "Birthdays"))
+        mac.syncNow(); phone.syncNow()
+        return mac to phone
+    }
+
+    @Test
+    fun freshStartKeepsSetupAndOtherDevicesSwitchInsteadOfMergingOldDataBack() = runBlocking<Unit> {
+        val cloud = Cloud()
+        val (mac, phone) = sharedBudget(cloud)
+        val archive = mac.archiveCurrent()
+        assertTrue(archive.name.contains(" archive "))
+        assertEquals(archive.text, cloud.archives[archive.name], "archived next to the sync file")
+
+        mac.freshStart(keepBalances = true)
+        mac.syncNow(forceWrite = true)
+        val d = mac.data.value
+        assertEquals("Birthdays", d.categories.getValue("seed-gifts").name, "categories kept")
+        assertTrue("chk" in d.accounts, "accounts kept")
+        assertTrue("t1" !in d.transactions, "transactions cleared")
+        assertTrue(d.assignments.isEmpty(), "assigned money cleared")
+        assertEquals(95500L, d.balance("chk"), "starts with the current balance")
+
+        // The phone still holds the old budget; syncing switches it rather than merging t1 back.
+        phone.syncNow()
+        assertTrue(phone.syncStatus.value.let { it is SyncStatus.Synced && it.switchedBudget })
+        assertTrue("t1" !in phone.data.value.transactions)
+        assertEquals(mac.data.value, phone.data.value)
+        mac.syncNow()
+        assertTrue("t1" !in mac.data.value.transactions, "old data never comes back")
+        assertTrue(phone.localArchives().any { it.startsWith("replaced archive") }, "phone kept a copy of what it had")
+    }
+
+    @Test
+    fun startFromScratchRemovesEverythingButIsArchived() = runBlocking<Unit> {
+        val cloud = Cloud()
+        val (mac, phone) = sharedBudget(cloud)
+        val archive = mac.archiveCurrent()
+        mac.startFromScratch()
+        mac.syncNow(forceWrite = true)
+        assertTrue(mac.data.value.accounts.isEmpty())
+        assertTrue(mac.data.value.transactions.isEmpty())
+        assertEquals("Gifts", mac.data.value.categories.getValue("seed-gifts").name, "default categories again")
+        phone.syncNow()
+        assertTrue(phone.data.value.accounts.isEmpty())
+
+        // Bring the archive back: both devices end up with the old budget again.
+        mac.archiveCurrent()
+        mac.restore(com.z.imab.data.Ledger.decodeFile(archive.text))
+        mac.syncNow(forceWrite = true)
+        phone.syncNow()
+        assertTrue("t1" in phone.data.value.transactions)
+        assertEquals("Birthdays", phone.data.value.categories.getValue("seed-gifts").name)
+    }
+
+    @Test
+    fun aDeviceThatStartedFreshOfflineArchivesTheOldCloudFileBeforeReplacingIt() = runBlocking<Unit> {
+        val cloud = Cloud()
+        val (mac, _) = sharedBudget(cloud)
+        val old = cloud.main
+        // Reset without archiving first (e.g. offline): sync keeps the old cloud budget.
+        mac.budget.startFromScratch()
+        mac.syncNow()
+        assertTrue(cloud.archives.values.contains(old))
+        assertTrue(com.z.imab.data.Ledger.decodeFile(cloud.main).budgetId == mac.budget.ledger.budgetId)
     }
 
     @Test

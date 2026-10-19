@@ -38,6 +38,10 @@ class AndroidStorage(private val context: Context) : Storage {
         }
     }
 
+    override suspend fun listLocal(prefix: String): List<String> = withContext(Dispatchers.IO) {
+        context.filesDir.listFiles { f -> f.isFile && f.name.startsWith(prefix) }?.sortedByDescending { it.lastModified() }?.map { it.name }.orEmpty()
+    }
+
     override fun restoreSyncLocation(id: String, displayName: String): SyncLocation? {
         val uri = Uri.parse(id)
         val granted = context.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
@@ -128,6 +132,23 @@ class AndroidPickers(private val activity: ComponentActivity) : Pickers {
         }
         val name = displayName(uri)
         return SyncLocation(uri.toString(), if (provider != null) "$provider › $name" else name)
+    }
+
+    override suspend fun saveFile(suggestedName: String, text: String): String? {
+        val uri = await { createDoc.launch(suggestedName) } ?: return null
+        withContext(Dispatchers.IO) {
+            activity.contentResolver.openOutputStream(uri, "w")?.use { it.write(text.encodeToByteArray()) }
+                ?: error("Can't write the archive.")
+        }
+        return displayName(uri)
+    }
+
+    override suspend fun pickArchive(): PickedFile? {
+        val uri = await { openDoc.launch(arrayOf("application/json", "application/octet-stream", "text/plain", "*/*")) } ?: return null
+        return withContext(Dispatchers.IO) {
+            val text = activity.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } ?: return@withContext null
+            PickedFile(displayName(uri), text)
+        }
     }
 
     override fun syncAppName(location: SyncLocation): String? = cloudApp(location)?.first

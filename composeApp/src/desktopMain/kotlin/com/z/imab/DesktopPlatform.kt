@@ -43,6 +43,17 @@ class DesktopStorage : Storage {
         listOf(main) + conflictCopies(file).mapNotNull { runCatching { it.readText() }.getOrNull() }
     }
 
+    override suspend fun writeArchive(location: SyncLocation, name: String, text: String): Boolean = withContext(Dispatchers.IO) {
+        val folder = File(location.id).parentFile ?: return@withContext false
+        if (!folder.isDirectory) return@withContext false
+        atomicWrite(File(folder, name), text)
+        true
+    }
+
+    override suspend fun listLocal(prefix: String): List<String> = withContext(Dispatchers.IO) {
+        dir.listFiles { f -> f.isFile && f.name.startsWith(prefix) }?.sortedByDescending { it.lastModified() }?.map { it.name }.orEmpty()
+    }
+
     override suspend fun syncStamp(location: SyncLocation): String = withContext(Dispatchers.IO) {
         val file = File(location.id)
         (listOf(file) + conflictCopies(file)).joinToString("|") { "${it.name}:${it.lastModified()}:${it.length()}" }
@@ -61,7 +72,7 @@ class DesktopStorage : Storage {
     private fun conflictCopies(file: File): List<File> {
         val base = file.nameWithoutExtension
         return file.parentFile?.listFiles { f ->
-            f.isFile && f != file && f.extension == "json" && f.name.startsWith(base)
+            f.isFile && f != file && f.extension == "json" && f.name.startsWith(base) && !isArchive(f.name)
         }?.toList().orEmpty()
     }
 
@@ -88,6 +99,30 @@ class DesktopPickers : Pickers {
 
     override val syncHint: String =
         "On a Mac, OneDrive, Google Drive and Dropbox appear in the sidebar of the file dialog (or under ~/Library/CloudStorage)."
+
+    override suspend fun saveFile(suggestedName: String, text: String): String? {
+        val dialog = FileDialog(null as Frame?, "Save archive", FileDialog.SAVE)
+        dialog.directory = defaultDir().path
+        dialog.file = suggestedName
+        dialog.isVisible = true
+        val name = dialog.file ?: return null
+        val file = File(dialog.directory, name)
+        withContext(Dispatchers.IO) { file.writeText(text) }
+        return displayPath(file)
+    }
+
+    override suspend fun pickArchive(): PickedFile? {
+        val dialog = FileDialog(null as Frame?, "Choose an IMAB archive to restore", FileDialog.LOAD)
+        dialog.directory = lastSyncFolder ?: defaultDir().path
+        dialog.setFilenameFilter { _, name -> name.endsWith(".json") }
+        dialog.isVisible = true
+        val name = dialog.file ?: return null
+        val file = File(dialog.directory, name)
+        return withContext(Dispatchers.IO) { PickedFile(file.name, file.readText()) }
+    }
+
+    /** Folder of the sync file, so the archive picker opens where archives are saved. */
+    var lastSyncFolder: String? = null
 
     override suspend fun pickImportFile(): PickedFile? {
         val dialog = FileDialog(null as Frame?, "Choose a bank file (.qbo, .qfx, .ofx)", FileDialog.LOAD)
@@ -126,3 +161,6 @@ class DesktopPickers : Pickers {
         return if (cloud != null && file.path.startsWith(cloud)) file.path.removePrefix("$cloud/") else file.path
     }
 }
+
+/** Archives are saved next to the sync file; they must never be merged in as conflict copies. */
+internal fun isArchive(name: String) = name.contains(" archive ")

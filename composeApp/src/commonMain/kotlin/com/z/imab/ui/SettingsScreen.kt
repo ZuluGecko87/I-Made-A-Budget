@@ -154,6 +154,8 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers) {
             }
         }
 
+        StartOverCard(store, pickers)
+
         Text(
             "IMAB — I Made A Budget · v1.0.0",
             style = MaterialTheme.typography.labelSmall,
@@ -167,6 +169,8 @@ private fun syncText(s: SyncStatus): String = when (s) {
     SyncStatus.Idle -> "Waiting to sync…"
     SyncStatus.Syncing -> "Syncing…"
     is SyncStatus.Synced -> "Last synced ${time(s.atMillis)}" +
+        (if (s.switchedBudget) " · switched to the new budget started on another device" else "") +
+        (s.archivedOld?.let { " · archived the older budget as \"$it\"" } ?: "") +
         (if (s.pulled > 0) " · received ${s.pulled} change(s)" else "") +
         (if (s.pushed) " · uploaded changes" else " · up to date")
     is SyncStatus.Failed -> "Sync failed at ${time(s.atMillis)}: ${s.message}"

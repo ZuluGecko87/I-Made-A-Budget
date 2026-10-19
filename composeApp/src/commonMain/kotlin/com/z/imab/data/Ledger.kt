@@ -42,6 +42,13 @@ data class LedgerFile(
     @EncodeDefault val format: String = "",
     @EncodeDefault val version: Int = 1,
     val ops: List<Op>,
+    /**
+     * Which budget this is. A fresh start or restore begins a new budget with a new id; a device
+     * holding an older budget adopts the newer one instead of merging the old data back in.
+     * Files from before this existed have "" and 0.
+     */
+    val budgetId: String = "",
+    val startedAt: Long = 0,
 ) {
     companion object {
         const val FORMAT = "imab-ledger"
@@ -70,6 +77,17 @@ val ImabJson = Json {
 class Ledger {
     private val ops = HashMap<String, Op>()
 
+    /** See [LedgerFile.budgetId]. */
+    var budgetId: String = ""
+    var startedAt: Long = 0
+
+    /** Empties the ledger for a new budget. */
+    fun reset(newBudgetId: String, newStartedAt: Long) {
+        ops.clear()
+        budgetId = newBudgetId
+        startedAt = newStartedAt
+    }
+
     /** Highest timestamp seen; local writes always go after it so they win over what we've seen. */
     var maxTs: Long = 0
         private set
@@ -97,8 +115,14 @@ class Ledger {
         return t
     }
 
-    fun encode(): String =
-        ImabJson.encodeToString(LedgerFile.serializer(), LedgerFile(LedgerFile.FORMAT, ops = ops.values.sortedBy { it.key }))
+    fun encode(): String = ImabJson.encodeToString(
+        LedgerFile.serializer(),
+        LedgerFile(LedgerFile.FORMAT, ops = ops.values.sortedBy { it.key }, budgetId = budgetId, startedAt = startedAt),
+    )
+
+    /** Whether [file] is a newer budget than this one (it replaces this one rather than merging). */
+    fun isOlderThan(file: LedgerFile): Boolean =
+        file.budgetId != budgetId && file.startedAt > startedAt
 
     /** True if [other] holds exactly the same versions as this ledger. */
     fun sameAs(other: List<Op>): Boolean {
@@ -112,10 +136,13 @@ class Ledger {
          * some cloud apps on Android overwrite a file without cutting it to the new length, leaving
          * the tail of the previous version behind.
          */
-        fun decode(text: String): List<Op> {
+        fun decode(text: String): List<Op> = decodeFile(text).ops
+
+        /** The whole file, including which budget it is. Throws if it isn't an IMAB ledger file. */
+        fun decodeFile(text: String): LedgerFile {
             val file = ImabJson.decodeFromString(LedgerFile.serializer(), firstJsonObject(text))
             require(file.format == LedgerFile.FORMAT) { "Not an IMAB budget file" }
-            return file.ops
+            return file
         }
 
         /** True if [text] has leftover bytes after the budget, so the file should be rewritten clean. */
