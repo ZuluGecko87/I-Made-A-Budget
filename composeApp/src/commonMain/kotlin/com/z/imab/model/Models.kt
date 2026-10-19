@@ -92,16 +92,34 @@ data class Category(
     val groupId: String,
     val name: String,
     val sortOrder: Int = 0,
-    val goal: SavingsGoal? = null,
+    val goal: CategoryGoal? = null,
 )
 
-/** Save up to [target] in a category, optionally by [targetDate] and/or with a planned [monthly] amount. */
 @Serializable
-data class SavingsGoal(
+enum class GoalType {
+    /** Build up to [CategoryGoal.target] over time; money always rolls over. */
+    SAVINGS,
+    /** Have [CategoryGoal.target] available to spend every month, like rent. */
+    MONTHLY_SPENDING,
+}
+
+/**
+ * A goal for a category.
+ *  - SAVINGS: save up to [target], optionally by [targetDate] and/or with a planned [monthly] amount.
+ *  - MONTHLY_SPENDING: [target] is needed each month. With [rollover] off, money left at the end of
+ *    a month goes back to Ready to Assign instead of carrying over.
+ */
+@Serializable
+data class CategoryGoal(
     val target: Long,
     val targetDate: LocalDate? = null,
     val monthly: Long? = null,
-)
+    val type: GoalType = GoalType.SAVINGS,
+    val rollover: Boolean = true,
+) {
+    /** Whether leftover money carries into next month. */
+    val rollsOver: Boolean get() = type == GoalType.SAVINGS || rollover
+}
 
 /** Amounts are in cents. Negative = outflow, positive = inflow. */
 @Serializable

@@ -9,7 +9,7 @@ import com.z.imab.importer.ImportWindow
 import com.z.imab.importer.OfxParser
 import com.z.imab.importer.OfxTransaction
 import com.z.imab.model.Account
-import com.z.imab.model.SavingsGoal
+import com.z.imab.model.CategoryGoal
 import com.z.imab.model.YearMonth
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
@@ -25,7 +25,7 @@ class GoalAndImportWindowTest {
 
     @Test
     fun progressRemainingAndEtaAtPlannedAmount() {
-        val goal = SavingsGoal(target = 500000, monthly = 50000)
+        val goal = CategoryGoal(target = 500000, monthly = 50000)
         // Saved 100 a month for three months; $1,200 in the category now.
         val history = listOf(CategoryMonth(10000, 0, 100000), CategoryMonth(10000, 0, 110000), CategoryMonth(10000, 0, 120000))
         val s = GoalMath.status(goal, oct, history)
@@ -44,7 +44,7 @@ class GoalAndImportWindowTest {
     @Test
     fun targetDateGivesMonthlyAmountNeeded() {
         // $1,200 by March 2027: Oct..Mar is 6 months.
-        val goal = SavingsGoal(target = 120000, targetDate = LocalDate(2027, 3, 15))
+        val goal = CategoryGoal(target = 120000, targetDate = LocalDate(2027, 3, 15))
         val notYet = GoalMath.status(goal, oct, listOf(CategoryMonth()))
         assertEquals(6, notYet.monthsLeft)
         assertEquals(20000L, notYet.assignThisMonth)
@@ -59,7 +59,7 @@ class GoalAndImportWindowTest {
 
     @Test
     fun reachedAndOverdueGoals() {
-        val goal = SavingsGoal(target = 50000, targetDate = LocalDate(2026, 8, 1))
+        val goal = CategoryGoal(target = 50000, targetDate = LocalDate(2026, 8, 1))
         val reached = GoalMath.status(goal, oct, listOf(CategoryMonth(0, 0, 60000)))
         assertTrue(reached.reached)
         assertEquals(1f, reached.progress)
@@ -75,7 +75,7 @@ class GoalAndImportWindowTest {
         val b = Budget("dev").also { it.seedDefaults() }
         b.saveAccount(Account("chk", "Checking"), 500000, LocalDate(2026, 7, 31))
         val ef = b.data.categories.getValue("seed-emergency-fund")
-        b.saveCategory(ef.copy(goal = SavingsGoal(target = 300000)))
+        b.saveCategory(ef.copy(goal = CategoryGoal(target = 300000)))
         b.setAssigned(YearMonth(2026, 8), ef.id, 30000)
         b.setAssigned(YearMonth(2026, 9), ef.id, 30000)
         b.setAssigned(oct, ef.id, 30000)

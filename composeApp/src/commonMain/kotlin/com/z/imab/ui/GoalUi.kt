@@ -31,7 +31,9 @@ import com.z.imab.budget.GoalMath
 import com.z.imab.budget.GoalStatus
 import com.z.imab.model.Category
 import com.z.imab.model.Money
-import com.z.imab.model.SavingsGoal
+import com.z.imab.model.CategoryGoal
+import com.z.imab.model.GoalType
+import androidx.compose.material3.FilterChip
 import com.z.imab.model.YearMonth
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
@@ -41,6 +43,15 @@ private fun shortMonth(m: YearMonth) = "${m.label.take(3)} ${m.year}"
 
 /** One-line summary, e.g. "45% of $5,000 · on track for Mar 2027". */
 fun goalHeadline(s: GoalStatus): String {
+    if (s.isMonthly) {
+        val spent = if (s.spent > 0) " · spent ${Money.format(s.spent)}" else ""
+        val resets = if (s.goal.rollover) "" else " · resets monthly"
+        return if (s.reached) {
+            "Funded ${Money.format(s.goal.target)}/mo$spent$resets"
+        } else {
+            "${Money.format(s.saved)} of ${Money.format(s.goal.target)} allocated · ${Money.format(s.remaining)} to go$spent$resets"
+        }
+    }
     val pct = "${(s.progress * 100).roundToInt()}% of ${Money.format(s.goal.target)}"
     val target = s.goal.targetDate?.let { YearMonth.of(it) }
     return when {
@@ -87,7 +98,7 @@ fun GoalDialog(
     category: Category,
     month: YearMonth,
     history: List<CategoryMonth>,
-    onSave: (SavingsGoal?) -> Unit,
+    onSave: (CategoryGoal?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val existing = category.goal
@@ -95,32 +106,68 @@ fun GoalDialog(
     var hasDate by remember { mutableStateOf(existing?.targetDate != null) }
     var date by remember { mutableStateOf(existing?.targetDate ?: today().plus(1, DateTimeUnit.YEAR)) }
     var monthlyText by remember { mutableStateOf(existing?.monthly?.let(Money::toInput).orEmpty()) }
+    var type by remember { mutableStateOf(existing?.type ?: GoalType.SAVINGS) }
+    var rollover by remember { mutableStateOf(existing?.rollover ?: true) }
+    val isMonthly = type == GoalType.MONTHLY_SPENDING
 
     val target = Money.parse(targetText)?.takeIf { it > 0 }
     val monthly = if (monthlyText.isBlank()) null else Money.parse(monthlyText)
-    val monthlyValid = monthlyText.isBlank() || (monthly != null && monthly > 0)
-    val draft = target?.let { SavingsGoal(it, date.takeIf { hasDate }, monthly?.takeIf { m -> m > 0 }) }
+    val monthlyValid = isMonthly || monthlyText.isBlank() || (monthly != null && monthly > 0)
+    val draft = target?.let {
+        if (isMonthly) CategoryGoal(it, type = GoalType.MONTHLY_SPENDING, rollover = rollover)
+        else CategoryGoal(it, date.takeIf { hasDate }, monthly?.takeIf { m -> m > 0 })
+    }
     val preview = draft?.let { GoalMath.status(it, month, history) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Savings goal · ${category.name}") },
+        title = { Text("Goal · ${category.name}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                MoneyField("Target amount", targetText, { targetText = it }, Modifier.fillMaxWidth(), isError = targetText.isNotBlank() && target == null)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(hasDate, { hasDate = it })
-                    Text("Reach it by a date")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(!isMonthly, { type = GoalType.SAVINGS }, label = { Text("Savings goal") })
+                    FilterChip(isMonthly, { type = GoalType.MONTHLY_SPENDING }, label = { Text("Monthly spending") })
                 }
-                if (hasDate) DateField("Target date", date, { date = it }, Modifier.fillMaxWidth())
-                MoneyField(
-                    "Planned monthly amount (optional)",
-                    monthlyText,
-                    { monthlyText = it },
-                    Modifier.fillMaxWidth(),
-                    isError = !monthlyValid,
+                Text(
+                    if (isMonthly) {
+                        "Money to have available every month for things like rent or groceries. What you assign can be spent from this category."
+                    } else {
+                        "Save up a total over time. Money stays in the category from month to month until you spend it."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                preview?.let { GoalPreview(it, month) }
+                MoneyField(
+                    if (isMonthly) "Amount needed each month" else "Target amount",
+                    targetText, { targetText = it }, Modifier.fillMaxWidth(), isError = targetText.isNotBlank() && target == null,
+                )
+                if (isMonthly) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(rollover, { rollover = it })
+                        Column {
+                            Text("Roll over month to month")
+                            Text(
+                                if (rollover) "Unspent money carries into next month and counts toward it."
+                                else "Unspent money goes back to Ready to Assign at the end of each month.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(hasDate, { hasDate = it })
+                        Text("Reach it by a date")
+                    }
+                    if (hasDate) DateField("Target date", date, { date = it }, Modifier.fillMaxWidth())
+                    MoneyField(
+                        "Planned monthly amount (optional)",
+                        monthlyText,
+                        { monthlyText = it },
+                        Modifier.fillMaxWidth(),
+                        isError = !monthlyValid,
+                    )
+                }
+                preview?.let { if (it.isMonthly) MonthlyPreview(it, month) else GoalPreview(it, month) }
             }
         },
         confirmButton = {
@@ -185,6 +232,26 @@ private fun GoalPreview(s: GoalStatus, month: YearMonth) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun MonthlyPreview(s: GoalStatus, month: YearMonth) {
+    Card {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LinearProgressIndicator(
+                progress = { s.progress },
+                modifier = Modifier.fillMaxWidth().height(6.dp),
+                strokeCap = StrokeCap.Round,
+                drawStopIndicator = {},
+            )
+            Text("${Money.format(s.saved)} of ${Money.format(s.goal.target)} allocated for ${month.label}", fontWeight = FontWeight.SemiBold)
+            Text(
+                if (s.reached) "Fully funded for this month." else "Assign ${Money.format(s.assignThisMonth)} in total this month to fund it.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (s.spent > 0) Text("Spent so far: ${Money.format(s.spent)}", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

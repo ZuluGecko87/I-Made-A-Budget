@@ -60,6 +60,7 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
     val data by store.data.collectAsState()
     var adding by remember { mutableStateOf(false) }
     val duplicates = remember(data) { MergeFinder.countByAccount(data) }
+    var addingTo by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
@@ -91,7 +92,9 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
                     Text(Money.format(accounts.sumOf { data.balance(it.id) }), fontWeight = FontWeight.SemiBold)
                 }
             }
-            items(accounts, key = { it.id }) { a -> AccountRow(a, data, duplicates[a.id] ?: 0) { nav.openAccount(a.id) } }
+            items(accounts, key = { it.id }) { a ->
+                AccountRow(a, data, duplicates[a.id] ?: 0, onAdd = { addingTo = a.id }) { nav.openAccount(a.id) }
+            }
         }
         if (data.uncategorizedCount > 0) {
             item {
@@ -102,6 +105,17 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
         }
     }
 
+    addingTo?.let { id ->
+        TransactionDialog(
+            data = data,
+            initial = null,
+            defaultAccountId = id,
+            newId = store.budget::newId,
+            onSave = { store.budget.saveTransaction(it); addingTo = null },
+            onDelete = null,
+            onDismiss = { addingTo = null },
+        )
+    }
     if (adding) {
         AccountDialog(
             initial = null,
@@ -118,7 +132,7 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
 }
 
 @Composable
-private fun AccountRow(a: Account, data: BudgetData, possibleDuplicates: Int, onClick: () -> Unit) {
+private fun AccountRow(a: Account, data: BudgetData, possibleDuplicates: Int, onAdd: () -> Unit, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -136,6 +150,9 @@ private fun AccountRow(a: Account, data: BudgetData, possibleDuplicates: Int, on
         }
         val bal = data.balance(a.id)
         Text(Money.format(bal), color = amountColor(bal), fontWeight = FontWeight.SemiBold)
+        if (!a.closed) {
+            IconButton(onClick = onAdd) { Icon(Icons.Default.Add, "Add transaction to ${a.name}", tint = MaterialTheme.colorScheme.primary) }
+        }
     }
     HorizontalDivider()
 }

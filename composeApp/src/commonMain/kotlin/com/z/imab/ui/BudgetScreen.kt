@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.z.imab.budget.BudgetMath
 import com.z.imab.budget.CardPayment
 import com.z.imab.budget.GoalMath
+import com.z.imab.budget.GoalNeed
 import com.z.imab.budget.GoalStatus
 import com.z.imab.budget.CategoryMonth
 import com.z.imab.data.BudgetStore
@@ -66,6 +67,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
         GoalMath.status(it, month, listOf(prev2.category(c.id), prev.category(c.id), mb.category(c.id)))
     }
     var editingGoal by remember { mutableStateOf<Category?>(null) }
+    var fundingGoals by remember { mutableStateOf(false) }
 
     /** Category id and display name being assigned to (regular or credit card payment). */
     var assigning by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -99,6 +101,27 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             }
             if (mb.overspentCount > 0) {
                 AssistChip(onClick = {}, label = { Text("${mb.overspentCount} overspent categor${if (mb.overspentCount == 1) "y" else "ies"}") })
+            }
+            val needs = remember(data, month) {
+                data.categories.values.mapNotNull { c ->
+                    goalStatus(c)?.let { GoalNeed(c.id, mb.category(c.id).assigned, it.assignThisMonth, it.isMonthly) }
+                }
+            }
+            val stillNeeded = needs.sumOf { maxOf(0, it.wanted - it.assigned) }
+            if (stillNeeded > 0) {
+                val canFund = minOf(stillNeeded, BudgetMath.freeToAssign(data, month, YearMonth.of(today())))
+                AssistChip(
+                    onClick = { if (canFund > 0) fundingGoals = true },
+                    label = {
+                        Text(
+                            if (canFund > 0) "Fund goals: ${Money.format(stillNeeded)} needed this month"
+                            else "Goals need ${Money.format(stillNeeded)} — nothing left to assign"
+                        )
+                    },
+                )
+            }
+            if (mb.returnedLastMonth > 0) {
+                AssistChip(onClick = {}, label = { Text("${Money.format(mb.returnedLastMonth)} returned from last month") })
             }
             if (mb.overspentLastMonth > 0) {
                 AssistChip(onClick = {}, label = { Text("${Money.format(mb.overspentLastMonth)} overspent last month") })
@@ -166,8 +189,52 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             lastMonth = prev.category(id),
             card = mb.cards.firstOrNull { it.categoryId == id },
             goal = data.categories[id]?.let(::goalStatus),
+            maxAssignable = BudgetMath.maxAssignable(data, month, YearMonth.of(today()), id),
             onDismiss = { assigning = null },
             onSave = { store.budget.setAssigned(month, id, it); assigning = null },
+        )
+    }
+    if (fundingGoals) {
+        val needs = data.categories.values.mapNotNull { c ->
+            goalStatus(c)?.let { GoalNeed(c.id, mb.category(c.id).assigned, it.assignThisMonth, it.isMonthly) }
+        }.sortedBy { data.categories.getValue(it.categoryId).name }
+        val available = BudgetMath.freeToAssign(data, month, YearMonth.of(today()))
+        val plan = GoalMath.fundingPlan(needs, available)
+        val total = plan.entries.sumOf { (id, v) -> v - mb.category(id).assigned }
+        val short = needs.sumOf { maxOf(0, it.wanted - it.assigned) } - total
+        AlertDialog(
+            onDismissRequest = { fundingGoals = false },
+            title = { Text("Fund goals for ${month.label}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Monthly spending goals are funded first, then savings goals, using only what's in Ready to Assign.", style = MaterialTheme.typography.bodySmall)
+                    plan.forEach { (id, newAssigned) ->
+                        Row {
+                            Text(data.categoryName(id), Modifier.weight(1f))
+                            Text("+${Money.format(newAssigned - mb.category(id).assigned)}")
+                        }
+                    }
+                    HorizontalDivider()
+                    Row {
+                        Text("Total", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                        Text(Money.format(total), fontWeight = FontWeight.SemiBold)
+                    }
+                    if (short > 0) {
+                        Text(
+                            "${Money.format(short)} of what your goals want can't be funded — that's more than you have to assign.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = plan.isNotEmpty(), onClick = {
+                    plan.forEach { (id, v) -> store.budget.setAssigned(month, id, v) }
+                    fundingGoals = false
+                }) { Text("Assign ${Money.format(total)}") }
+            },
+            dismissButton = { TextButton(onClick = { fundingGoals = false }) { Text("Cancel") } },
         )
     }
     editingGoal?.let { c ->
@@ -313,7 +380,7 @@ private fun CategoryRow(
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Category options") }
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Assign money") }, onClick = { menu = false; onAssign() })
-                DropdownMenuItem(text = { Text(if (goal == null) "Set savings goal…" else "Edit savings goal…") }, onClick = { menu = false; onGoal() })
+                DropdownMenuItem(text = { Text(if (goal == null) "Set goal…" else "Edit goal…") }, onClick = { menu = false; onGoal() })
                 DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() })
                 DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })
             }
@@ -330,11 +397,14 @@ private fun AssignDialog(
     lastMonth: CategoryMonth,
     card: CardPayment?,
     goal: GoalStatus? = null,
+    maxAssignable: Long,
     onDismiss: () -> Unit,
     onSave: (Long) -> Unit,
 ) {
     var text by remember { mutableStateOf(if (current.assigned == 0L) "" else Money.toInput(current.assigned)) }
     val parsed = if (text.isBlank()) 0L else Money.parse(text)
+    // You can always lower an amount; raising it can't use more than Ready to Assign has.
+    val tooMuch = parsed != null && parsed > current.assigned && parsed > maxAssignable
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("$name · ${month.label}") },
@@ -358,7 +428,13 @@ private fun AssignDialog(
                         color = MaterialTheme.colorScheme.tertiary,
                     )
                 }
-                MoneyField("Assigned", text, { text = it }, Modifier.fillMaxWidth(), isError = parsed == null)
+                MoneyField("Assigned", text, { text = it }, Modifier.fillMaxWidth(), isError = parsed == null || tooMuch)
+                Text(
+                    if (tooMuch) "That's more than you have. The most you can assign here is ${Money.format(maxAssignable)}."
+                    else "Up to ${Money.format(maxOf(current.assigned, maxAssignable))} can be assigned here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (tooMuch) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (current.available < 0) {
                         AssistChip(onClick = { text = Money.toInput(current.assigned - current.available) }, label = { Text("Cover overspending") })
@@ -380,7 +456,7 @@ private fun AssignDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { parsed?.let(onSave) }, enabled = parsed != null) { Text("Assign") } },
+        confirmButton = { TextButton(onClick = { parsed?.let(onSave) }, enabled = parsed != null && !tooMuch) { Text("Assign") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

@@ -39,6 +39,8 @@ data class MonthBudget(
     val incomeThisMonth: Long,
     /** Cash overspending from last month that was taken out of this month's Ready to Assign. */
     val overspentLastMonth: Long,
+    /** Money left last month in categories that don't roll over, returned to Ready to Assign. */
+    val returnedLastMonth: Long = 0,
 ) {
     fun category(id: String) = categories[id] ?: CategoryMonth()
     val overspentCount: Int get() = categories.values.count { it.available < 0 }
@@ -61,6 +63,9 @@ data class MonthBudget(
  *    credited to the card as Ready to Assign comes out of the payment category.
  *  - Debt from before the card was added ("pre-existing debt") isn't in the budget; you pay it down
  *    by assigning money to the payment category.
+ *
+ * A category whose goal is monthly spending without roll over starts each month empty; what was
+ * left goes back to Ready to Assign.
  *
  * At the end of a month a negative balance resets to zero:
  *  - cash overspending is taken out of next month's Ready to Assign;
@@ -121,6 +126,8 @@ object BudgetMath {
 
         val carry = HashMap<String, Long>()
         val cashOverspentBy = HashMap<YearMonth, Long>()
+        val returnedBy = HashMap<YearMonth, Long>()
+        val rollsOver = data.categories.mapValues { (_, c) -> c.goal?.rollsOver ?: true }
         var result: Map<String, CategoryMonth> = emptyMap()
         val firstMonth = (activity.keys + assigned.keys).minOrNull()
 
@@ -131,6 +138,7 @@ object BudgetMath {
             val months = HashMap<String, CategoryMonth>()
             val intoPayment = HashMap<String, Long>()
             var cashOverspent = 0L
+            var returned = 0L
 
             for (cat in data.categories.keys) {
                 val byCard = act.credit[cat].orEmpty()
@@ -152,7 +160,13 @@ object BudgetMath {
                 if (end < 0) cashOverspent += -end - creditOverspent
 
                 months[cat] = CategoryMonth(asg[cat] ?: 0, total, end, creditOverspent)
-                carry[cat] = maxOf(0, end)
+                // Leftovers in a category that doesn't roll over go back to Ready to Assign.
+                if (rollsOver[cat] == false) {
+                    returned += maxOf(0, end)
+                    carry[cat] = 0
+                } else {
+                    carry[cat] = maxOf(0, end)
+                }
             }
 
             for ((card, pid) in paymentIds) {
@@ -165,6 +179,7 @@ object BudgetMath {
             }
 
             cashOverspentBy[m] = cashOverspent
+            returnedBy[m] = returned
             if (m == month) result = months
             m += 1
         }
@@ -172,6 +187,7 @@ object BudgetMath {
         val categories = validIds.associateWith { result[it] ?: CategoryMonth() }
         val inflows = activity.filterKeys { it <= month }.values.sumOf { it.toBeBudgeted }
         val pastOverspending = cashOverspentBy.filterKeys { it < month }.values.sum()
+        val pastReturned = returnedBy.filterKeys { it < month }.values.sum()
         val income = data.transactions.values
             .filter {
                 it.categoryId == READY_TO_ASSIGN && it.amount > 0 && YearMonth.of(it.date) == month &&
@@ -181,14 +197,29 @@ object BudgetMath {
 
         return MonthBudget(
             month = month,
-            readyToAssign = inflows - assignedEver - pastOverspending,
+            readyToAssign = inflows - assignedEver - pastOverspending + pastReturned,
             categories = categories,
             cards = paymentIds.map { (card, pid) ->
                 CardPayment(card, pid, owed = -data.balance(card), available = categories.getValue(pid).available)
             },
             incomeThisMonth = income,
             overspentLastMonth = cashOverspentBy[month - 1] ?: 0,
+            returnedLastMonth = returnedBy[month - 1] ?: 0,
         )
+    }
+
+    /**
+     * The most that can be assigned to [categoryId] in [month] without assigning more money than you
+     * have: what's there now plus Ready to Assign, using the tighter of [month] and [currentMonth]
+     * (a past month has had less income, and an assignment anywhere uses up money now).
+     */
+    fun maxAssignable(data: BudgetData, month: YearMonth, currentMonth: YearMonth, categoryId: String): Long =
+        compute(data, month).category(categoryId).assigned + freeToAssign(data, month, currentMonth)
+
+    /** Ready to Assign that can still be given out in [month] (never negative). */
+    fun freeToAssign(data: BudgetData, month: YearMonth, currentMonth: YearMonth): Long {
+        val viewed = compute(data, month).readyToAssign
+        return maxOf(0, if (month == currentMonth) viewed else minOf(viewed, compute(data, currentMonth).readyToAssign))
     }
 
     private fun HashMap<String, Long>.add(key: String, amount: Long) {

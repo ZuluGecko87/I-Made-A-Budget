@@ -15,9 +15,17 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
 - **Transfers** between accounts keep both sides in step. Transfers between two budget accounts
   don't need a category. A transfer to a tracking account takes one.
 - **Scheduled transactions** (once, weekly … yearly) are entered on their date automatically.
-- **Savings goals** on any category: a target amount, optionally a target date and/or a planned
-  monthly amount. The budget shows progress and either the monthly amount needed to hit the date or
-  an estimated finish month, both at your plan and at your actual pace over the last 3 months.
+- **Goals** on any category, showing how much is allocated against what's needed:
+  - *Savings goal*: a target amount, optionally a date and/or a planned monthly amount. Money rolls
+    over; shows progress, the monthly amount needed for the date, and an estimated finish month
+    (at your plan and at your pace over the last 3 months).
+  - *Monthly spending*: an amount needed every month (rent, groceries). Assigned money is spent from
+    the category. With *roll over* on, leftovers carry into next month and count toward it; off,
+    they go back to Ready to Assign at month end.
+  - *Fund goals* fills underfunded goals from Ready to Assign (monthly spending first, then savings).
+- **You can't assign more than you have**: assigning is capped at what's in Ready to Assign
+  (lowering an amount is always allowed).
+- Add a transaction from the account list with the **+** next to each account, or inside an account.
 - **Bank import** of QuickBooks `.qbo` files (`.qfx` and `.ofx` work too). On the Mac you can drag
   the file onto an account's transactions to import into that account.
   - the first import into an account asks how far back to go (the starting balance adjusts if the account was just created from the file);

@@ -79,11 +79,15 @@ class ScreenshotTest {
         b.setAssigned(month, "seed-rent-mortgage", 150000)
         b.setAssigned(month, "seed-dining-out", 3000)
         // Savings goals: one with a planned monthly amount, one with a target date.
-        b.saveCategory(b.data.categories.getValue("seed-emergency-fund").copy(goal = com.z.imab.model.SavingsGoal(500000, monthly = 25000)))
+        b.saveCategory(b.data.categories.getValue("seed-emergency-fund").copy(goal = com.z.imab.model.CategoryGoal(500000, monthly = 25000)))
         b.setAssigned(month - 1, "seed-emergency-fund", 50000)
         b.setAssigned(month, "seed-emergency-fund", 25000)
-        b.saveCategory(b.data.categories.getValue("seed-vacation").copy(goal = com.z.imab.model.SavingsGoal(200000, targetDate = month.plus(9).firstDay)))
+        b.saveCategory(b.data.categories.getValue("seed-vacation").copy(goal = com.z.imab.model.CategoryGoal(200000, targetDate = month.plus(9).firstDay)))
         b.setAssigned(month, "seed-vacation", 10000)
+        // Monthly spending goals: rent rolls over, dining out resets each month.
+        b.saveCategory(b.data.categories.getValue("seed-rent-mortgage").copy(goal = com.z.imab.model.CategoryGoal(150000, type = com.z.imab.model.GoalType.MONTHLY_SPENDING)))
+        b.saveCategory(b.data.categories.getValue("seed-dining-out").copy(goal = com.z.imab.model.CategoryGoal(20000, type = com.z.imab.model.GoalType.MONTHLY_SPENDING, rollover = false)))
+        b.saveCategory(b.data.categories.getValue("seed-electric").copy(goal = com.z.imab.model.CategoryGoal(12000, type = com.z.imab.model.GoalType.MONTHLY_SPENDING)))
         b.saveScheduled(ScheduledTransaction("r", "chk", month.lastDay, month.lastDay, Frequency.MONTHLY, -150000, "Landlord", categoryId = "seed-rent-mortgage"))
 
         val nav = NavState()
@@ -107,6 +111,7 @@ class ScreenshotTest {
         nav.go(Screen.Scheduled); shot("scheduled-wide", 1800, 1000)
         nav.go(Screen.Settings); shot("settings-wide", 1800, 1000)
         nav.go(Screen.Budget); shot("budget-goals-wide", 1800, 2700)
+        nav.go(Screen.Accounts); shot("accounts-wide", 1800, 900)
 
         // Dropping a bank file on Everyday Checking: first import into it.
         val qbo = PickedFile("Checking_Oct.qbo", Samples.QBO_CHECKING)
