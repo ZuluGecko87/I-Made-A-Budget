@@ -36,6 +36,7 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   always offers to add a new one. Settings → Payees lets you rename a payee everywhere, or merge
   a misspelling into the right one.
 - Tap a category's name to rename it, move it to another group, or set its goal; tap its numbers to assign money.
+- Add a transaction from the Budget screen: the **Add transaction** button, or a category's menu (or its activity list) to start one with that category filled in; pick the account it was paid from.
 - Add a transaction from the account list with the **+** next to each account, or inside an account.
 - **Bank import** of QuickBooks `.qbo` files (`.qfx` and `.ofx` work too). On the Mac you can drag
   the file onto an account's transactions to import into that account.

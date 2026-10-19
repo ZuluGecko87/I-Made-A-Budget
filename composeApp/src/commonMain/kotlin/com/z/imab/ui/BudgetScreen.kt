@@ -84,6 +84,23 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
     var moving by remember { mutableStateOf<String?>(null) }
     var editingTxn by remember { mutableStateOf<Transaction?>(null) }
 
+    /**
+     * A new, unsaved transaction for [categoryId] (or none). The account is the one last used for
+     * that category, else the first budget account; it can be changed in the form.
+     */
+    fun newTransaction(categoryId: String?): Transaction {
+        val lastAccount = categoryId?.let { id ->
+            data.transactions.values.filter { it.categoryId == id && data.accounts[it.accountId]?.closed == false }
+                .maxByOrNull { it.date }?.accountId
+        }
+        val account = lastAccount
+            ?: data.sortedAccounts.firstOrNull { it.inBudget && !it.closed && !it.type.isCredit }?.id
+            ?: data.sortedAccounts.firstOrNull { !it.closed }?.id
+            ?: ""
+        val date = if (month == YearMonth.of(today())) today() else month.firstDay
+        return Transaction(store.budget.newId(), account, date, 0, categoryId = categoryId)
+    }
+
     /** Category id and display name being assigned to (regular or credit card payment). */
     var assigning by remember { mutableStateOf<Pair<String, String>?>(null) }
     var paying by remember { mutableStateOf<Transaction?>(null) }
@@ -103,7 +120,15 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             IconButton(onClick = { month += 1 }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next month") }
             if (month != YearMonth.of(today())) TextButton(onClick = { month = YearMonth.of(today()) }) { Text("Today") }
             Spacer(Modifier.weight(1f))
-            if (wide) ReadyToAssignCard(mb.readyToAssign)
+            if (wide) {
+                OutlinedButton(onClick = { editingTxn = newTransaction(null) }, modifier = Modifier.padding(end = 12.dp)) {
+                    Icon(Icons.Default.Add, null)
+                    Text("Add transaction")
+                }
+                ReadyToAssignCard(mb.readyToAssign)
+            } else {
+                IconButton(onClick = { editingTxn = newTransaction(null) }) { Icon(Icons.Default.Add, "Add transaction") }
+            }
         }
         if (!wide) ReadyToAssignCard(mb.readyToAssign, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
 
@@ -183,6 +208,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         onGoal = { editingGoal = c },
                         onActivity = { showingActivity = c },
                         onAvailable = { moving = c.id },
+                        onAddTransaction = { editingTxn = newTransaction(c.id) },
                     )
                 }
             }
@@ -225,7 +251,12 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
         )
     }
     showingActivity?.let { c ->
-        ActivityDialog(data, c, month, onEdit = { editingTxn = it }, onDismiss = { showingActivity = null })
+        ActivityDialog(
+            data, c, month,
+            onEdit = { editingTxn = it },
+            onAdd = { editingTxn = newTransaction(c.id) },
+            onDismiss = { showingActivity = null },
+        )
     }
     editingTxn?.let { t ->
         TransactionDialog(
@@ -234,7 +265,10 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             defaultAccountId = t.accountId,
             newId = store.budget::newId,
             onSave = { store.budget.saveTransaction(it); editingTxn = null },
-            onDelete = { store.budget.deleteTransaction(t.id); editingTxn = null },
+            // A new transaction started from the budget has nothing to delete yet.
+            onDelete = if (t.id in data.transactions) {
+                { store.budget.deleteTransaction(t.id); editingTxn = null }
+            } else null,
             onDismiss = { editingTxn = null },
         )
     }
@@ -370,6 +404,7 @@ private fun CategoryRow(
     onGoal: () -> Unit,
     onActivity: () -> Unit,
     onAvailable: () -> Unit,
+    onAddTransaction: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -412,6 +447,7 @@ private fun CategoryRow(
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Category options") }
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Assign money") }, onClick = { menu = false; onAssign() })
+                DropdownMenuItem(text = { Text("Add transaction") }, onClick = { menu = false; onAddTransaction() })
                 DropdownMenuItem(text = { Text("Show activity") }, onClick = { menu = false; onActivity() })
                 DropdownMenuItem(text = { Text(if (goal == null) "Set goal…" else "Edit goal…") }, onClick = { menu = false; onGoal() })
                 DropdownMenuItem(text = { Text("Edit category…") }, onClick = { menu = false; onRename() })
@@ -608,7 +644,14 @@ private fun CardPaymentRow(
 
 /** The transactions behind a category's activity for one month. Tap one to edit it. */
 @Composable
-private fun ActivityDialog(data: BudgetData, category: Category, month: YearMonth, onEdit: (Transaction) -> Unit, onDismiss: () -> Unit) {
+private fun ActivityDialog(
+    data: BudgetData,
+    category: Category,
+    month: YearMonth,
+    onEdit: (Transaction) -> Unit,
+    onAdd: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val txns = data.transactions.values
         .filter { it.categoryId == category.id && YearMonth.of(it.date) == month && data.isOnBudget(it.accountId) }
         .sortedWith(compareByDescending<Transaction> { it.date }.thenBy { it.id })
@@ -647,6 +690,7 @@ private fun ActivityDialog(data: BudgetData, category: Category, month: YearMont
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { TextButton(onClick = onAdd) { Text("Add transaction") } },
     )
 }
 
