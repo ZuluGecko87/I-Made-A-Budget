@@ -85,6 +85,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
     /** Category whose available amount was clicked, to cover overspending or move money. */
     /** Last change to assigned money, so it can be undone. */
     var lastChange by remember { mutableStateOf<AssignChange?>(null) }
+    var assigningMany by remember { mutableStateOf(false) }
     var editingTxn by remember { mutableStateOf<Transaction?>(null) }
 
     /**
@@ -130,12 +131,12 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                     Icon(Icons.Default.Add, null)
                     Text("Add transaction")
                 }
-                ReadyToAssignCard(mb.readyToAssign)
+                ReadyToAssignCard(mb.readyToAssign) { assigningMany = true }
             } else {
                 IconButton(onClick = { editingTxn = newTransaction(null) }) { Icon(Icons.Default.Add, "Add transaction") }
             }
         }
-        if (!wide) ReadyToAssignCard(mb.readyToAssign, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+        if (!wide) ReadyToAssignCard(mb.readyToAssign, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) { assigningMany = true }
 
         FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (data.uncategorizedCount > 0) {
@@ -302,6 +303,21 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             onDismiss = { editingTxn = null },
         )
     }
+    if (assigningMany) {
+        AssignMoneyDialog(
+            data = data,
+            board = GoalBoard(data, month),
+            free = BudgetMath.freeToAssign(data, month, YearMonth.of(today())),
+            onAssign = { newAmounts ->
+                val previous = newAmounts.keys.associateWith { mb.category(it).assigned }
+                store.budget.setAssignedAll(month, newAmounts)
+                val total = newAmounts.entries.sumOf { (id, v) -> v - (previous[id] ?: 0) }
+                lastChange = AssignChange(month, "Assigned ${Money.format(total)} to ${newAmounts.size} categor${if (newAmounts.size == 1) "y" else "ies"} (${month.label})", previous)
+                assigningMany = false
+            },
+            onDismiss = { assigningMany = false },
+        )
+    }
     if (fundingGoals) {
         FundGoalsDialog(data, GoalBoard(data, month), store.budget) { fundingGoals = false }
     }
@@ -363,16 +379,19 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
 }
 
 @Composable
-private fun ReadyToAssignCard(cents: Long, modifier: Modifier = Modifier) {
+private fun ReadyToAssignCard(cents: Long, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = if (cents >= 0) {
         CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     } else {
         CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
     }
-    Card(colors = colors, modifier = modifier) {
+    Card(onClick = onClick, colors = colors, modifier = modifier) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.End) {
             Text(Money.format(cents), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(if (cents >= 0) "Ready to Assign" else "Assigned more than you have", style = MaterialTheme.typography.labelSmall)
+            Text(
+                if (cents >= 0) "Ready to Assign · tap to assign" else "Assigned more than you have",
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }
@@ -524,7 +543,7 @@ private fun EditCategoryDialog(
 }
 
 /** A change to assigned money in [month]; [previous] holds the amounts to put back to undo it. */
-private data class AssignChange(val month: YearMonth, val description: String, val previous: Map<String, Long>)
+internal data class AssignChange(val month: YearMonth, val description: String, val previous: Map<String, Long>)
 
 /**
  * Set how much is assigned to a category. Extra money comes from Ready to Assign unless another
