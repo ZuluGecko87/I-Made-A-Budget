@@ -83,8 +83,8 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
     var fundingGoals by remember { mutableStateOf(false) }
     var showingActivity by remember { mutableStateOf<Category?>(null) }
     /** Category whose available amount was clicked, to cover overspending or move money. */
-    var moving by remember { mutableStateOf<String?>(null) }
-    var lastMove by remember { mutableStateOf<Move?>(null) }
+    /** Last change to assigned money, so it can be undone. */
+    var lastChange by remember { mutableStateOf<AssignChange?>(null) }
     var editingTxn by remember { mutableStateOf<Transaction?>(null) }
 
     /**
@@ -106,6 +106,8 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
 
     /** Category id and display name being assigned to (regular or credit card payment). */
     var assigning by remember { mutableStateOf<Pair<String, String>?>(null) }
+    /** Whether the assign dialog was opened from an overspent amount (pre-fills covering it). */
+    var assigningToCover by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf<Transaction?>(null) }
     var renamingCategory by remember { mutableStateOf<Category?>(null) }
     var renamingGroup by remember { mutableStateOf<CategoryGroup?>(null) }
@@ -170,21 +172,16 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             }
         }
 
-        lastMove?.let { m ->
-            fun name(id: String?) = if (id == null) "Ready to Assign" else data.categoryName(id)
+        lastChange?.let { m ->
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             ) {
                 Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Moved ${Money.format(m.amount)} from ${name(m.from)} to ${name(m.to)} (${m.month.label})",
-                        Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    TextButton(onClick = { store.budget.moveMoney(m.month, m.to, m.from, m.amount); lastMove = null }) { Text("Undo") }
-                    TextButton(onClick = { lastMove = null }) { Text("OK") }
+                    Text(m.description, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { store.budget.setAssignedAll(m.month, m.previous); lastChange = null }) { Text("Undo") }
+                    TextButton(onClick = { lastChange = null }) { Text("OK") }
                 }
             }
         }
@@ -198,10 +195,13 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         card = card,
                         cm = mb.category(card.categoryId),
                         wide = wide,
-                        onAssign = { assigning = card.categoryId to data.categoryName(card.categoryId) },
+                        onAssign = { assigningToCover = false; assigning = card.categoryId to data.categoryName(card.categoryId) },
                         onPay = { paying = paymentTemplate(data, card.accountId, card.available, store.budget.newId()) },
                         onOpen = { nav.openAccount(card.accountId) },
-                        onAvailable = { moving = card.categoryId },
+                        onAvailable = {
+                            assigningToCover = mb.category(card.categoryId).available < 0
+                            assigning = card.categoryId to data.categoryName(card.categoryId)
+                        },
                     )
                 }
             }
@@ -222,13 +222,13 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         category = c,
                         cm = mb.category(c.id),
                         wide = wide,
-                        onAssign = { assigning = c.id to c.name },
+                        onAssign = { assigningToCover = false; assigning = c.id to c.name },
                         onRename = { renamingCategory = c },
                         onDelete = { deleting = "Delete \"${c.name}\"? Its transactions become uncategorized." to { store.budget.deleteCategory(c.id) } },
                         goal = goalStatus(c),
                         onGoal = { editingGoal = c },
                         onActivity = { showingActivity = c },
-                        onAvailable = { moving = c.id },
+                        onAvailable = { assigningToCover = mb.category(c.id).available < 0; assigning = c.id to c.name },
                         onAddTransaction = { editingTxn = newTransaction(c.id) },
                     )
                 }
@@ -244,36 +244,40 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
 
     assigning?.let { (id, name) ->
         AssignDialog(
+            data = data,
+            mb = mb,
+            categoryId = id,
             name = name,
             month = month,
-            current = mb.category(id),
             lastMonth = prev.category(id),
-            card = mb.cards.firstOrNull { it.categoryId == id },
             goal = data.categories[id]?.let(::goalStatus),
-            maxAssignable = BudgetMath.maxAssignable(data, month, YearMonth.of(today()), id),
+            free = BudgetMath.freeToAssign(data, month, YearMonth.of(today())),
+            coverOverspending = assigningToCover,
             // Regular categories can be renamed right here; card payment categories are named after the card.
             renameable = data.categories.containsKey(id),
             onDismiss = { assigning = null },
-            onSave = { amount, newName ->
+            onSave = { amount, newName, other ->
                 data.categories[id]?.let { c -> if (newName.isNotBlank() && newName != c.name) store.budget.saveCategory(c.copy(name = newName)) }
-                if (amount != mb.category(id).assigned) store.budget.setAssigned(month, id, amount)
+                val before = mb.category(id).assigned
+                val delta = amount - before
+                if (delta != 0L) {
+                    val previous = mutableMapOf(id to before)
+                    val otherName = other?.let { data.categoryName(it) } ?: "Ready to Assign"
+                    if (other == null) {
+                        store.budget.setAssigned(month, id, amount)
+                    } else {
+                        previous[other] = mb.category(other).assigned
+                        if (delta > 0) store.budget.moveMoney(month, other, id, delta) else store.budget.moveMoney(month, id, other, -delta)
+                    }
+                    lastChange = AssignChange(
+                        month,
+                        if (delta > 0) "Assigned ${Money.format(delta)} more to $name from $otherName (${month.label})"
+                        else "Moved ${Money.format(-delta)} from $name to $otherName (${month.label})",
+                        previous,
+                    )
+                }
                 assigning = null
             },
-        )
-    }
-    moving?.let { id ->
-        MoveMoneyDialog(
-            data = data,
-            mb = mb,
-            month = month,
-            categoryId = id,
-            free = BudgetMath.freeToAssign(data, month, YearMonth.of(today())),
-            onMove = { from, to, amount ->
-                store.budget.moveMoney(month, from, to, amount)
-                lastMove = Move(month, from, to, amount)
-                moving = null
-            },
-            onDismiss = { moving = null },
         )
     }
     showingActivity?.let { c ->
@@ -519,31 +523,61 @@ private fun EditCategoryDialog(
     )
 }
 
+/** A change to assigned money in [month]; [previous] holds the amounts to put back to undo it. */
+private data class AssignChange(val month: YearMonth, val description: String, val previous: Map<String, Long>)
+
+/**
+ * Set how much is assigned to a category. Extra money comes from Ready to Assign unless another
+ * category is chosen; lowering it returns the difference to Ready to Assign or a chosen category.
+ */
 @Composable
 private fun AssignDialog(
+    data: BudgetData,
+    mb: MonthBudget,
+    categoryId: String,
     name: String,
     month: YearMonth,
-    current: CategoryMonth,
     lastMonth: CategoryMonth,
-    card: CardPayment?,
     goal: GoalStatus? = null,
-    maxAssignable: Long,
+    free: Long,
+    coverOverspending: Boolean,
     renameable: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (amount: Long, name: String) -> Unit,
+    onSave: (amount: Long, name: String, other: String?) -> Unit,
 ) {
-    var text by remember { mutableStateOf(if (current.assigned == 0L) "" else Money.toInput(current.assigned)) }
+    val current = mb.category(categoryId)
+    val card = mb.cards.firstOrNull { it.categoryId == categoryId }
+    val start = if (coverOverspending && current.available < 0) current.assigned - current.available else current.assigned
+    var text by remember { mutableStateOf(if (start == 0L) "" else Money.toInput(start)) }
     var newName by remember { mutableStateOf(name) }
+    /** Where extra money comes from, or where a reduction goes. null = Ready to Assign. */
+    var other by remember { mutableStateOf<String?>(null) }
     val parsed = if (text.isBlank()) 0L else Money.parse(text)
-    // You can always lower an amount; raising it can't use more than Ready to Assign has.
-    val tooMuch = parsed != null && parsed > current.assigned && parsed > maxAssignable
+    val delta = (parsed ?: current.assigned) - current.assigned
+    fun has(id: String?): Long = if (id == null) free else mb.category(id).available
+    fun label(id: String?): String = if (id == null) "Ready to Assign" else data.categoryName(id)
+    val ids = (data.sortedGroups.flatMap { data.categoriesIn(it.id) }.map { it.id } + mb.cards.map { it.categoryId }).filter { it != categoryId }
+    val rta = PickerOption<String?>(null, "Ready to Assign — ${Money.format(free)}")
+    val sources = listOf(rta) + ids.filter { has(it) > 0 || it == other }.map { PickerOption<String?>(it, "${data.categoryName(it)} — ${Money.format(has(it))}") }
+    val destinations = listOf(rta) + ids.map { PickerOption<String?>(it, "${data.categoryName(it)} — ${Money.format(has(it))}") }
+    // You can always lower an amount; raising it can't take more than the source has.
+    val tooMuch = delta > 0 && delta > has(other)
+    val current0 = YearMonth.of(today())
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (renameable) month.label else "$name · ${month.label}") },
+        title = { Text(if (renameable) "Assign · ${month.label}" else "$name · ${month.label}") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (renameable) {
                     OutlinedTextField(newName, { newName = it }, label = { Text("Category name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+                if (month != current0) {
+                    Text(
+                        "This changes the budget for ${month.label}, not ${current0.label}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
                 }
                 Text("Activity ${Money.format(current.activity)} · Available ${Money.format(current.available)}", style = MaterialTheme.typography.bodySmall)
                 if (card != null) {
@@ -555,21 +589,35 @@ private fun AssignDialog(
                 if (goal != null) {
                     Text(goalHeadline(goal), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
-                if (current.creditOverspent > 0) {
+                if (current.available < 0) {
                     Text(
-                        "${Money.format(current.creditOverspent)} was charged to a credit card without money behind it. " +
-                            "Cover it this month so it can be paid off, or it stays as card debt.",
+                        "${Money.format(-current.available)} overspent" +
+                            if (current.creditOverspent > 0) " (on a credit card — cover it this month so the card can be paid, or it stays as card debt)." else ".",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.tertiary,
+                        color = if (current.creditOverspent > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                     )
                 }
                 MoneyField("Assigned", text, { text = it }, Modifier.fillMaxWidth(), isError = parsed == null || tooMuch)
-                Text(
-                    if (tooMuch) "That's more than you have. The most you can assign here is ${Money.format(maxAssignable)}."
-                    else "Up to ${Money.format(maxOf(current.assigned, maxAssignable))} can be assigned here.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (tooMuch) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                when {
+                    delta > 0 -> {
+                        Picker("Take the money from", sources, other, { other = it }, Modifier.fillMaxWidth())
+                        Text(
+                            if (tooMuch) "${label(other)} only has ${Money.format(maxOf(0, has(other)))}."
+                            else "Takes ${Money.format(delta)} from ${label(other)}.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (tooMuch) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    delta < 0 -> {
+                        Picker("Put the difference in", destinations, other, { other = it }, Modifier.fillMaxWidth())
+                        Text("Moves ${Money.format(-delta)} to ${label(other)}.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    else -> Text(
+                        "Up to ${Money.format(current.assigned + free)} can be assigned from Ready to Assign, or choose another category once you raise it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (current.available < 0) {
                         AssistChip(onClick = { text = Money.toInput(current.assigned - current.available) }, label = { Text("Cover overspending") })
@@ -593,7 +641,7 @@ private fun AssignDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { parsed?.let { onSave(it, newName.trim()) } },
+                onClick = { parsed?.let { onSave(it, newName.trim(), other.takeIf { delta != 0L }) } },
                 enabled = parsed != null && !tooMuch && newName.isNotBlank(),
             ) { Text("Save") }
         },
@@ -720,85 +768,3 @@ private fun ActivityDialog(
     )
 }
 
-/** A completed move, so it can be undone. */
-private data class Move(val month: YearMonth, val from: String?, val to: String?, val amount: Long)
-
-/**
- * Clicking an available amount: move money between any two categories (or Ready to Assign) in
- * the month being viewed. A category with nothing available (or overspent) is filled in as where
- * the money goes; one with money as where it comes from. Either side can be changed or swapped.
- */
-@Composable
-private fun MoveMoneyDialog(
-    data: BudgetData,
-    mb: MonthBudget,
-    month: YearMonth,
-    categoryId: String,
-    free: Long,
-    onMove: (from: String?, to: String?, amount: Long) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val cm = mb.category(categoryId)
-    val receiving = cm.available <= 0
-    val ids = data.sortedGroups.flatMap { data.categoriesIn(it.id) }.map { it.id } + mb.cards.map { it.categoryId }
-    fun has(id: String?): Long = if (id == null) free else mb.category(id).available
-    fun label(id: String?): String = if (id == null) "Ready to Assign" else data.categoryName(id)
-    val needed = if (cm.available < 0) -cm.available else 0L
-
-    var from by remember {
-        mutableStateOf(
-            if (!receiving) categoryId
-            else if (free > 0 && free >= needed) null
-            else ids.filter { it != categoryId && has(it) > 0 }.maxByOrNull { has(it) }
-        )
-    }
-    var to by remember { mutableStateOf<String?>(if (receiving) categoryId else null) }
-    var text by remember { mutableStateOf(if (receiving) (if (needed > 0) Money.toInput(needed) else "") else Money.toInput(cm.available)) }
-    var submitted by remember { mutableStateOf(false) }
-    val amount = Money.parse(text)
-    val options = listOf(PickerOption<String?>(null, "Ready to Assign — ${Money.format(free)}")) +
-        ids.map { PickerOption<String?>(it, "${data.categoryName(it)} — ${Money.format(has(it))}") }
-    val valid = from != to && amount != null && amount > 0 && amount <= has(from)
-    val current = YearMonth.of(today())
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("${if (cm.available < 0) "Cover overspending" else "Move money"} · ${month.label}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (cm.available < 0) {
-                    Text("${data.categoryName(categoryId)} is ${Money.format(needed)} overspent.", style = MaterialTheme.typography.bodyMedium)
-                }
-                if (month != current) {
-                    Text(
-                        "This changes the budget for ${month.label}, not ${current.label}.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
-                Picker("From", options, from, { from = it }, Modifier.fillMaxWidth())
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    TextButton(onClick = { val f = from; from = to; to = f }) { Text("⇅ Swap") }
-                }
-                Picker("To", options, to, { to = it }, Modifier.fillMaxWidth())
-                MoneyField("Amount", text, { text = it }, Modifier.fillMaxWidth(), isError = text.isNotBlank() && !valid)
-                when {
-                    from == to -> Text("Choose two different places.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    amount != null && amount > has(from) -> Text(
-                        "${label(from)} only has ${Money.format(maxOf(0, has(from)))}.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = valid && !submitted, onClick = {
-                val a = amount ?: return@TextButton
-                submitted = true
-                onMove(from, to, a)
-            }) { Text("Move") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}

@@ -52,4 +52,15 @@ class MoveMoneyTest {
         assertEquals(20000L, m.category(groceries).assigned)
         assertEquals(75000L, m.readyToAssign)
     }
+
+    @Test
+    fun undoPutsBothCategoriesBack() {
+        val b = budget()
+        val before = mapOf(groceries to 30000L, dining to 5000L)
+        b.moveMoney(oct, groceries, dining, 3000)
+        b.setAssignedAll(oct, before)
+        val m = BudgetMath.compute(b.data, oct)
+        assertEquals(30000L, m.category(groceries).assigned)
+        assertEquals(5000L, m.category(dining).assigned)
+    }
 }

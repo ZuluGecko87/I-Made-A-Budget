@@ -420,6 +420,14 @@ class Budget(
         toCategoryId?.let { adjust(it, amount) }
     }
 
+    /** Sets several categories' assigned amounts in one edit (used to undo a change). */
+    fun setAssignedAll(month: YearMonth, amounts: Map<String, Long>) = edit {
+        amounts.forEach { (categoryId, amount) ->
+            val a = Assignment(month.toString(), categoryId, amount)
+            if (amount == 0L) remove(Kinds.ASSIGNMENT, a.key) else put(Kinds.ASSIGNMENT, a.key, a, Assignment.serializer())
+        }
+    }
+
     fun setAssigned(month: YearMonth, categoryId: String, amount: Long) = edit {
         val a = Assignment(month.toString(), categoryId, amount)
         if (amount == 0L) remove(Kinds.ASSIGNMENT, a.key) else put(Kinds.ASSIGNMENT, a.key, a, Assignment.serializer())
