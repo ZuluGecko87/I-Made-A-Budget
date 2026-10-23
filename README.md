@@ -32,7 +32,8 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
 - **Click a category's numbers** to set how much is assigned. Extra money comes from Ready to
   Assign unless you pick another category to take it from; lowering it returns the difference to
   Ready to Assign or a category you choose. Clicking an overspent amount pre-fills covering it.
-  Each change can be undone right after.
+  Each change can be undone right after. The **Move money** tab of the same dialog (or *Move money…*
+  in a category's menu) moves money between any two categories or Ready to Assign.
 - **You can't assign more than you have**: assigning is capped at what's in Ready to Assign
   (lowering an amount is always allowed).
 - On a phone each category shows what was spent under its name; tap it (or *Show activity* in the

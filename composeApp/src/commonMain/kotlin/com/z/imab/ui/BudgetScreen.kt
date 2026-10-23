@@ -37,6 +37,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Tab
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
@@ -109,6 +111,8 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
     var assigning by remember { mutableStateOf<Pair<String, String>?>(null) }
     /** Whether the assign dialog was opened from an overspent amount (pre-fills covering it). */
     var assigningToCover by remember { mutableStateOf(false) }
+    /** Whether to open the category dialog on its Move money tab. */
+    var assigningMove by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf<Transaction?>(null) }
     var renamingCategory by remember { mutableStateOf<Category?>(null) }
     var renamingGroup by remember { mutableStateOf<CategoryGroup?>(null) }
@@ -196,11 +200,12 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         card = card,
                         cm = mb.category(card.categoryId),
                         wide = wide,
-                        onAssign = { assigningToCover = false; assigning = card.categoryId to data.categoryName(card.categoryId) },
+                        onAssign = { assigningToCover = false; assigningMove = false; assigning = card.categoryId to data.categoryName(card.categoryId) },
                         onPay = { paying = paymentTemplate(data, card.accountId, card.available, store.budget.newId()) },
                         onOpen = { nav.openAccount(card.accountId) },
                         onAvailable = {
                             assigningToCover = mb.category(card.categoryId).available < 0
+                            assigningMove = false
                             assigning = card.categoryId to data.categoryName(card.categoryId)
                         },
                     )
@@ -223,13 +228,14 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         category = c,
                         cm = mb.category(c.id),
                         wide = wide,
-                        onAssign = { assigningToCover = false; assigning = c.id to c.name },
+                        onAssign = { assigningToCover = false; assigningMove = false; assigning = c.id to c.name },
                         onRename = { renamingCategory = c },
                         onDelete = { deleting = "Delete \"${c.name}\"? Its transactions become uncategorized." to { store.budget.deleteCategory(c.id) } },
                         goal = goalStatus(c),
                         onGoal = { editingGoal = c },
                         onActivity = { showingActivity = c },
-                        onAvailable = { assigningToCover = mb.category(c.id).available < 0; assigning = c.id to c.name },
+                        onAvailable = { assigningToCover = mb.category(c.id).available < 0; assigningMove = false; assigning = c.id to c.name },
+                        onMoveMoney = { assigningToCover = false; assigningMove = true; assigning = c.id to c.name },
                         onAddTransaction = { editingTxn = newTransaction(c.id) },
                     )
                 }
@@ -256,7 +262,15 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             coverOverspending = assigningToCover,
             // Regular categories can be renamed right here; card payment categories are named after the card.
             renameable = data.categories.containsKey(id),
+            startOnMove = assigningMove,
             onDismiss = { assigning = null },
+            onMove = { from, to, amount ->
+                val previous = listOfNotNull(from, to).associateWith { mb.category(it).assigned }
+                store.budget.moveMoney(month, from, to, amount)
+                fun n(x: String?) = x?.let { data.categoryName(it) } ?: "Ready to Assign"
+                lastChange = AssignChange(month, "Moved ${Money.format(amount)} from ${n(from)} to ${n(to)} (${month.label})", previous)
+                assigning = null
+            },
             onSave = { amount, newName, other ->
                 data.categories[id]?.let { c -> if (newName.isNotBlank() && newName != c.name) store.budget.saveCategory(c.copy(name = newName)) }
                 val before = mb.category(id).assigned
@@ -454,6 +468,7 @@ private fun CategoryRow(
     onActivity: () -> Unit,
     onAvailable: () -> Unit,
     onAddTransaction: () -> Unit,
+    onMoveMoney: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -496,6 +511,7 @@ private fun CategoryRow(
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Category options") }
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Assign money") }, onClick = { menu = false; onAssign() })
+                DropdownMenuItem(text = { Text("Move money…") }, onClick = { menu = false; onMoveMoney() })
                 DropdownMenuItem(text = { Text("Add transaction") }, onClick = { menu = false; onAddTransaction() })
                 DropdownMenuItem(text = { Text("Show activity") }, onClick = { menu = false; onActivity() })
                 DropdownMenuItem(text = { Text(if (goal == null) "Set goal…" else "Edit goal…") }, onClick = { menu = false; onGoal() })
@@ -542,6 +558,9 @@ private fun EditCategoryDialog(
     )
 }
 
+/** Picker value meaning "nothing chosen yet" in the Move money tab. */
+private const val CHOOSE = "__choose__"
+
 /** A change to assigned money in [month]; [previous] holds the amounts to put back to undo it. */
 internal data class AssignChange(val month: YearMonth, val description: String, val previous: Map<String, Long>)
 
@@ -561,8 +580,10 @@ private fun AssignDialog(
     free: Long,
     coverOverspending: Boolean,
     renameable: Boolean = false,
+    startOnMove: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (amount: Long, name: String, other: String?) -> Unit,
+    onMove: (from: String?, to: String?, amount: Long) -> Unit,
 ) {
     val current = mb.category(categoryId)
     val card = mb.cards.firstOrNull { it.categoryId == categoryId }
@@ -583,13 +604,27 @@ private fun AssignDialog(
     val tooMuch = delta > 0 && delta > has(other)
     val current0 = YearMonth.of(today())
 
+    // Move money tab: this category is the source when it has money, otherwise the destination.
+    var tab by remember { mutableStateOf(if (startOnMove) 1 else 0) }
+    val withMoney = current.available > 0
+    var moveFrom by remember { mutableStateOf<String?>(if (withMoney) categoryId else CHOOSE) }
+    var moveTo by remember { mutableStateOf<String?>(if (withMoney) CHOOSE else categoryId) }
+    var moveText by remember { mutableStateOf(if (current.available < 0) Money.toInput(-current.available) else "") }
+    val moveAmount = Money.parse(moveText)
+    val everything = listOf(categoryId) + ids
+    val moveOptions = listOf(PickerOption<String?>(CHOOSE, "Choose…"), rta) +
+        everything.map { PickerOption<String?>(it, "${data.categoryName(it)} — ${Money.format(has(it))}") }
+    val moveChosen = moveFrom != CHOOSE && moveTo != CHOOSE
+    val moveValid = moveChosen && moveFrom != moveTo && moveAmount != null && moveAmount > 0 && moveAmount <= has(moveFrom)
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (renameable) "Assign · ${month.label}" else "$name · ${month.label}") },
+        title = { Text("$name · ${month.label}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (renameable) {
-                    OutlinedTextField(newName, { newName = it }, label = { Text("Category name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                PrimaryTabRow(selectedTabIndex = tab) {
+                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Assign") })
+                    Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Move money") })
                 }
                 if (month != current0) {
                     Text(
@@ -597,6 +632,35 @@ private fun AssignDialog(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.tertiary,
                     )
+                }
+                if (tab == 1) {
+                    Text(
+                        "Move money between categories (or Ready to Assign). ${data.categoryName(categoryId)} has ${Money.format(current.available)} available.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Picker("From", moveOptions, moveFrom, { moveFrom = it }, Modifier.fillMaxWidth())
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        TextButton(onClick = { val f = moveFrom; moveFrom = moveTo; moveTo = f }) { Text("⇅ Swap") }
+                    }
+                    Picker("To", moveOptions, moveTo, { moveTo = it }, Modifier.fillMaxWidth())
+                    MoneyField("Amount", moveText, { moveText = it }, Modifier.fillMaxWidth(), isError = moveText.isNotBlank() && moveChosen && !moveValid)
+                    when {
+                        !moveChosen -> Text("Choose where the money comes from and where it goes.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        moveFrom == moveTo -> Text("Choose two different places.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        moveAmount != null && moveAmount > has(moveFrom) -> Text(
+                            "${label(moveFrom)} only has ${Money.format(maxOf(0, has(moveFrom)))}.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        moveAmount != null && moveAmount > 0 -> Text(
+                            "Moves ${Money.format(moveAmount)} from ${label(moveFrom)} to ${label(moveTo)}.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                if (renameable) {
+                    OutlinedTextField(newName, { newName = it }, label = { Text("Category name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
                 Text("Activity ${Money.format(current.activity)} · Available ${Money.format(current.available)}", style = MaterialTheme.typography.bodySmall)
                 if (card != null) {
@@ -656,13 +720,18 @@ private fun AssignDialog(
                     AssistChip(onClick = { text = Money.toInput(lastMonth.assigned) }, label = { Text("Assigned last month (${Money.format(lastMonth.assigned)})") })
                     AssistChip(onClick = { text = Money.toInput(-lastMonth.activity) }, label = { Text("Spent last month (${Money.format(-lastMonth.activity)})") })
                 }
+                }
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = { parsed?.let { onSave(it, newName.trim(), other.takeIf { delta != 0L }) } },
-                enabled = parsed != null && !tooMuch && newName.isNotBlank(),
-            ) { Text("Save") }
+            if (tab == 1) {
+                TextButton(enabled = moveValid, onClick = { moveAmount?.let { onMove(moveFrom, moveTo, it) } }) { Text("Move") }
+            } else {
+                TextButton(
+                    onClick = { parsed?.let { onSave(it, newName.trim(), other.takeIf { delta != 0L }) } },
+                    enabled = parsed != null && !tooMuch && newName.isNotBlank(),
+                ) { Text("Save") }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
