@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +59,7 @@ enum class Screen(val label: String, val icon: ImageVector, val inNav: Boolean =
     Budget("Budget", Icons.Default.Home),
     Accounts("Accounts", Icons.Default.AccountBox),
     Goals("Goals", Icons.Default.Star),
+    Reports("Reports", Icons.AutoMirrored.Filled.List),
     Scheduled("Scheduled", Icons.Default.DateRange),
     Import("Import", Icons.Default.Refresh, inNav = false),
     Settings("Settings", Icons.Default.Settings),
@@ -215,6 +217,8 @@ private fun MainLayout(store: BudgetStore, pickers: Pickers, nav: NavState) {
                                 onClick = { nav.go(s) },
                                 icon = { Icon(s.icon, s.label) },
                                 label = { Text(s.label, maxLines = 1) },
+                                // Six tabs don't fit labelled on a phone: label only the selected one.
+                                alwaysShowLabel = false,
                             )
                         }
                     }
@@ -248,6 +252,7 @@ private fun Content(store: BudgetStore, pickers: Pickers, nav: NavState, wide: B
             if (id == null) AccountsScreen(store, nav) else RegisterScreen(store, nav, id, wide, pickers.supportsFileDrop)
         }
         Screen.Goals -> GoalsScreen(store)
+        Screen.Reports -> ReportsScreen(store)
         Screen.Scheduled -> ScheduledScreen(store, wide)
         Screen.Import -> ImportScreen(store, pickers, nav)
         Screen.Settings -> SettingsScreen(store, pickers)

@@ -55,6 +55,22 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   - the bank account is remembered, so the next file from it goes to the right account.
 - **Sync** through OneDrive, Google Drive or Dropbox.
 
+## Reports
+
+The **Reports** tab, for a month, a year or the last 12 months (‹ › to step back and forth):
+
+- **Spending**: total and average per month with the change vs the previous period, spending by
+  month, and by category or category group. Net of refunds; transfers and card payments aren't spending.
+- **Income**: money that came in to Ready to Assign (not starting balances), by month and by source,
+  and what was left after spending.
+- **Recurring payments**: repeating scheduled payments plus bills and subscriptions found in your
+  transactions (paid about monthly, for a consistent amount, in at least 3 of the last 6 months),
+  each as a monthly cost, with monthly and yearly totals.
+- **Debt to income**: average monthly debt payments (a loan's usual payment if set, otherwise what
+  was paid; what was paid to cards) ÷ average monthly income, against the 36% / 43% rules of thumb,
+  plus the housing ratio for mortgages. Income is take-home deposits, so it reads higher than a
+  lender's gross-pay figure.
+
 ## Loans and mortgages
 
 Give a Loan or Mortgage account its principal remaining, interest rate and monthly escrow (when adding it, or later by editing it — editing the principal corrects the balance and re-splits the payments). Loans are always tracked outside the budget, so what you owe never reduces Ready to Assign. Link payments to it
