@@ -88,6 +88,8 @@ data class BudgetData(
     fun categoryLabel(t: Transaction): String = when {
         isInternalTransfer(t) -> "Transfer"
         !isOnBudget(t.accountId) && t.categoryId == null -> "Tracking"
+        // A transfer between the budget and a tracking account still needs a budget category.
+        t.transferAccountId != null && needsCategory(t) -> "Transfer — needs a budget category"
         else -> categoryName(t.categoryId)
     }
 

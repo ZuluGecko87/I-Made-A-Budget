@@ -179,7 +179,8 @@ class Budget(
                 amount = -t.amount,
                 payee = existingPair?.payee?.takeIf { existingPair.importId != null } ?: t.payee,
                 memo = existingPair?.memo?.takeIf { it.isNotBlank() } ?: t.memo,
-                categoryId = if (toOn && !fromOn) (existingPair?.categoryId ?: input.categoryId ?: READY_TO_ASSIGN) else null,
+                // Budget money moves on the budget-side leg, so a category chosen from the tracking side goes there.
+                categoryId = if (toOn && !fromOn) (input.categoryId ?: existingPair?.categoryId ?: READY_TO_ASSIGN) else null,
                 transferAccountId = t.accountId,
                 transferPairId = t.id,
                 cleared = existingPair?.cleared ?: false,
