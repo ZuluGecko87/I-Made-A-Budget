@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -150,6 +153,78 @@ fun AvailablePill(cents: Long, modifier: Modifier = Modifier, creditOverspending
     }
 }
 
+private const val LONG_LIST = 10
+
+/** Full list in a dialog, with a search box; section headers stay with the items that match. */
+@Composable
+private fun <T> PickerDialog(
+    title: String,
+    options: List<PickerOption<T>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val q = query.trim().lowercase()
+    // Keep a header only if something under it matches.
+    val shown = remember(options, q) {
+        if (q.isEmpty()) options else {
+            val out = mutableListOf<PickerOption<T>>()
+            var header: PickerOption<T>? = null
+            for (o in options) {
+                if (o.isHeader) { header = o; continue }
+                if (o.label.lowercase().contains(q)) {
+                    header?.let { out += it; header = null }
+                    out += o
+                }
+            }
+            out
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    query, { query = it },
+                    placeholder = { Text("Search") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 8.dp)) {
+                    items(shown.size) { i ->
+                        val opt = shown[i]
+                        if (opt.isHeader) {
+                            Text(
+                                opt.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+                            )
+                        } else {
+                            Text(
+                                opt.label,
+                                fontWeight = if (opt.value == selected) FontWeight.Bold else null,
+                                color = if (opt.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                modifier = Modifier.fillMaxWidth()
+                                    .then(if (opt.enabled) Modifier.clickable { onSelect(opt.value) } else Modifier)
+                                    .padding(vertical = 12.dp),
+                            )
+                        }
+                    }
+                    if (shown.none { !it.isHeader }) {
+                        item { Text("Nothing matches.", modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
 data class PickerOption<T>(val value: T, val label: String, val isHeader: Boolean = false, val enabled: Boolean = true)
 
 /** A dropdown that behaves the same on desktop and phone. */
@@ -175,7 +250,12 @@ fun <T> Picker(
             }
             Icon(Icons.Default.ArrowDropDown, null)
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        // Long lists open as a dialog with search: a dropdown can run under the phone's navigation
+        // bar, leaving its last items out of reach.
+        if (open && options.count { !it.isHeader } > LONG_LIST) {
+            PickerDialog(label, options, selected, onSelect = { onSelect(it); open = false }, onDismiss = { open = false })
+        }
+        DropdownMenu(expanded = open && options.count { !it.isHeader } <= LONG_LIST, onDismissRequest = { open = false }) {
             options.forEach { opt ->
                 if (opt.isHeader) {
                     Text(
