@@ -454,7 +454,7 @@ private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, 
                         val transfer = Choice.transferId(it)
                         onChange(
                             row.copy(
-                                categoryId = if (transfer == null) Choice.categoryId(it) else row.categoryId,
+                                categoryId = Choice.categoryId(it),
                                 transferAccountId = transfer,
                                 loanAccountId = row.loanAccountId.takeIf { transfer == null },
                             )
@@ -462,16 +462,6 @@ private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, 
                     },
                     Modifier.width(260.dp),
                 )
-                val transferTo = row.transferAccountId
-                if (transferTo != null && accountId != null && data.isOnBudget(accountId) != data.isOnBudget(transferTo)) {
-                    Picker(
-                        "Budget category",
-                        categoryOptions(data, null, allowTransfers = false),
-                        Choice.of(row.categoryId, null),
-                        { onChange(row.copy(categoryId = Choice.categoryId(it))) },
-                        Modifier.width(260.dp),
-                    )
-                }
                 val loans = data.loanAccounts.filter { it.id != accountId }
                 if (loans.isNotEmpty() && row.source.amount < 0 && row.transferAccountId == null) {
                     Picker(

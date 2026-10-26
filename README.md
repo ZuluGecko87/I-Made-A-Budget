@@ -13,7 +13,8 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
 - **Every transaction gets a category.** Anything missing one is flagged on the Budget screen and
   listed under "Needs a category".
 - **Transfers** between accounts keep both sides in step. Transfers between two budget accounts
-  don't need a category. A transfer to a tracking account takes one.
+  don't need a category. Neither does a transfer to or from a tracking account: it's labelled
+  Transfer and the money comes out of (or goes into) Ready to Assign.
 - **Scheduled transactions** (once, weekly … yearly) are entered on their date automatically.
 - **Goals** on any category, showing how much is allocated against what's needed:
   - *Savings goal*: a target amount, optionally a date and/or a planned monthly amount. Money rolls

@@ -68,9 +68,12 @@ data class BudgetData(
         t.transferAccountId != null && accounts.containsKey(t.transferAccountId) &&
             isOnBudget(t.accountId) == isOnBudget(t.transferAccountId)
 
-    /** Whether this transaction affects the budget but still lacks a category. */
+    /**
+     * Whether this transaction affects the budget but still lacks a category. Transfers never do:
+     * one to or from a tracking account moves money out of or into Ready to Assign.
+     */
     fun needsCategory(t: Transaction): Boolean {
-        if (!isOnBudget(t.accountId) || isInternalTransfer(t) || t.loanPaymentOf != null) return false
+        if (!isOnBudget(t.accountId) || isTransfer(t) || t.loanPaymentOf != null) return false
         val c = t.categoryId
         if (c == PREEXISTING_DEBT && isCreditAccount(t.accountId)) return false
         return c == null || (c != READY_TO_ASSIGN && c !in categories)
@@ -85,11 +88,12 @@ data class BudgetData(
         return t.payee.ifBlank { "(no payee)" }
     }
 
+    /** A transfer to or from an account that still exists. */
+    fun isTransfer(t: Transaction): Boolean = t.transferAccountId != null && accounts.containsKey(t.transferAccountId)
+
     fun categoryLabel(t: Transaction): String = when {
-        isInternalTransfer(t) -> "Transfer"
+        isTransfer(t) && (isInternalTransfer(t) || t.categoryId == null || t.categoryId == READY_TO_ASSIGN) -> "Transfer"
         !isOnBudget(t.accountId) && t.categoryId == null -> "Tracking"
-        // A transfer between the budget and a tracking account still needs a budget category.
-        t.transferAccountId != null && needsCategory(t) -> "Transfer — needs a budget category"
         else -> categoryName(t.categoryId)
     }
 

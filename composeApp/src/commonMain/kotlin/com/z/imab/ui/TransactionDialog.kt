@@ -42,11 +42,8 @@ private class TxnForm(
     payee: String,
     memo: String,
     choice: String,
-    transferCategory: String? = null,
 ) {
     var accountId by mutableStateOf(accountId)
-    /** For a transfer between a budget account and a tracking account: the budget category it uses. */
-    var transferCategory by mutableStateOf(transferCategory)
     var date by mutableStateOf(date)
     var outflow by mutableStateOf(amount <= 0)
     var amountText by mutableStateOf(if (amount == 0L) "" else Money.toInput(abs(amount)))
@@ -57,11 +54,9 @@ private class TxnForm(
     val amount: Long? get() = Money.parse(amountText)?.let { if (outflow) -abs(it) else abs(it) }
     val valid: Boolean get() = amount != null && accountId.isNotEmpty()
 
-    /** The category to save: the picked one, or for a budget/tracking transfer the budget category. */
-    fun categoryToSave(data: BudgetData): String? {
-        val transfer = Choice.transferId(choice) ?: return Choice.categoryId(choice)
-        return transferCategory.takeIf { data.isOnBudget(accountId) != data.isOnBudget(transfer) }
-    }
+    /** The category to save; a transfer has none. */
+    fun categoryToSave(@Suppress("UNUSED_PARAMETER") data: BudgetData): String? =
+        if (Choice.transferId(choice) != null) null else Choice.categoryId(choice)
 }
 
 @Composable
@@ -78,19 +73,9 @@ private fun TxnFields(form: TxnForm, data: BudgetData, dateLabel: String) {
         val other = Choice.transferId(form.choice)
         if (data.isOnBudget(form.accountId) == data.isOnBudget(other)) {
             Text("Transfers between two budget accounts don't need a category.", style = MaterialTheme.typography.bodySmall)
-        } else {
-            // Money crossing between the budget and a tracking account comes out of (or into) a category.
-            val leaving = data.isOnBudget(form.accountId) == form.outflow
-            Picker(
-                "Budget category",
-                categoryOptions(data, null, allowTransfers = false),
-                Choice.of(form.transferCategory, null),
-                { form.transferCategory = Choice.categoryId(it) },
-                Modifier.fillMaxWidth(),
-            )
+        } else if (data.isOnBudget(form.accountId)) {
             Text(
-                if (leaving) "Money leaving your budget for a tracking account — choose the category it comes out of (e.g. an investing category)."
-                else "Money coming into your budget from a tracking account — usually Ready to Assign.",
+                "Money moving to a tracking account comes out of Ready to Assign; money coming back goes into it.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -121,8 +106,6 @@ fun TransactionDialog(
             payee = initial?.payee.orEmpty(),
             memo = initial?.memo.orEmpty(),
             choice = Choice.of(initial?.categoryId, initial?.transferAccountId),
-            // A budget/tracking transfer keeps its category on the budget-side leg.
-            transferCategory = initial?.categoryId ?: initial?.transferPairId?.let { data.transactions[it]?.categoryId },
         )
     }
     var cleared by remember { mutableStateOf(initial?.cleared ?: false) }
@@ -235,7 +218,6 @@ fun ScheduledDialog(
             payee = initial?.payee.orEmpty(),
             memo = initial?.memo.orEmpty(),
             choice = Choice.of(initial?.categoryId, initial?.transferAccountId),
-            transferCategory = initial?.categoryId,
         )
     }
     var frequency by remember { mutableStateOf(initial?.frequency ?: Frequency.MONTHLY) }
