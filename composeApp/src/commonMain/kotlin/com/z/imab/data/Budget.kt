@@ -440,7 +440,36 @@ class Budget(
     fun deleteTransaction(id: String) = edit { removeTxn(id) }
 
     fun setCleared(id: String, cleared: Boolean) = edit {
-        d.transactions[id]?.let { putTxn(it.copy(cleared = cleared)) }
+        // A reconciled transaction stays cleared; un-reconcile it in the transaction form first.
+        d.transactions[id]?.takeIf { !it.reconciled }?.let { putTxn(it.copy(cleared = cleared)) }
+    }
+
+    /**
+     * Finishes a reconcile of [accountId] against the bank's [bankBalance] on [date]: every cleared
+     * transaction up to that date is marked reconciled. If the cleared balance doesn't match and
+     * [adjust] is set, an adjustment transaction for the difference is added first.
+     */
+    fun reconcile(accountId: String, date: LocalDate, bankBalance: Long, adjust: Boolean) = edit {
+        val account = d.accounts[accountId] ?: return@edit
+        val cleared = d.transactions.values.filter { it.accountId == accountId && it.cleared && it.date <= date }
+        val difference = bankBalance - cleared.sumOf { it.amount }
+        if (difference != 0L && adjust) {
+            putTxn(
+                Transaction(
+                    id = newId(),
+                    accountId = accountId,
+                    date = date,
+                    amount = difference,
+                    payee = RECONCILE_ADJUSTMENT_PAYEE,
+                    memo = "Bank balance ${Money.format(bankBalance)}",
+                    categoryId = if (account.inBudget) READY_TO_ASSIGN else null,
+                    cleared = true,
+                    reconciled = true,
+                )
+            )
+        }
+        cleared.filter { !it.reconciled }.forEach { putTxn(it.copy(reconciled = true)) }
+        put(Kinds.ACCOUNT, accountId, account.copy(lastReconciled = date, reconciledBalance = bankBalance), Account.serializer())
     }
 
     /**
@@ -464,6 +493,7 @@ class Budget(
             transferPairId = if (enteredHasJob) entered.transferPairId else bank.transferPairId,
             cleared = true,
             importId = bank.importId,
+            reconciled = entered.reconciled || bank.reconciled,
             loanSplit = entered.loanSplit ?: bank.loanSplit.takeIf { !enteredHasJob },
         )
         saveTxn(merged)
@@ -634,6 +664,9 @@ class Budget(
 
     private fun slug(s: String) = s.lowercase().map { if (it.isLetterOrDigit()) it else '-' }.joinToString("")
 }
+
+/** Payee of the transaction a reconcile adds to make up a difference with the bank. */
+const val RECONCILE_ADJUSTMENT_PAYEE = "Reconciliation adjustment"
 
 /** Id of the principal entry a loan payment creates in the loan account. */
 fun principalLegId(paymentId: String) = "$paymentId-principal"

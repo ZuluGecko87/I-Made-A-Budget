@@ -103,6 +103,7 @@ fun TransactionDialog(
     }
     var cleared by remember { mutableStateOf(initial?.cleared ?: false) }
     var loanId by remember { mutableStateOf(initial?.loanSplit?.loanAccountId) }
+    var reconciled by remember { mutableStateOf(initial?.reconciled ?: false) }
     var confirmDelete by remember { mutableStateOf(false) }
     // A prefilled template (e.g. a card payment) isn't saved yet, so it's still "new".
     val isNew = initial == null || initial.id !in data.transactions
@@ -134,9 +135,19 @@ fun TransactionDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(cleared, { cleared = it })
-                    Text("Cleared")
+                if (reconciled) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(true, { reconciled = false })
+                        Column {
+                            Text("🔒 Reconciled")
+                            Text("Confirmed against a bank statement. Untick to change whether it's cleared.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(cleared, { cleared = it })
+                        Text("Cleared")
+                    }
                 }
                 if (initial?.importId != null) {
                     Text("Imported from bank", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -159,7 +170,8 @@ fun TransactionDialog(
                         transferAccountId = transfer,
                         // Changing the transfer target re-links to a new leg.
                         transferPairId = base.transferPairId.takeIf { transfer != null && transfer == base.transferAccountId },
-                        cleared = cleared,
+                        cleared = cleared || reconciled,
+                        reconciled = reconciled,
                         loanSplit = loanId?.takeIf { transfer == null && amount < 0 }?.let { id ->
                             base.loanSplit?.takeIf { it.loanAccountId == id } ?: com.z.imab.model.LoanSplit(id, 0, 0, 0)
                         },

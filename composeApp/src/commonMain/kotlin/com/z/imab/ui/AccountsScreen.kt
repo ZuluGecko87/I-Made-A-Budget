@@ -34,6 +34,8 @@ import androidx.compose.material3.TextButton
 import com.z.imab.importer.ImportMatcher
 import com.z.imab.importer.MergeCandidate
 import com.z.imab.importer.MergeFinder
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -183,6 +185,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
         if (isCard) BudgetMath.compute(data, YearMonth.of(today())).cards.firstOrNull { it.accountId == accountId } else null
     }
     var editingAccount by remember { mutableStateOf(false) }
+    var reconciling by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
 
     val all = if (uncategorizedView) data.transactions.values.filter { data.needsCategory(it) } else data.transactionsByAccount[accountId].orEmpty()
@@ -236,6 +239,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     }
                 }
                 OutlinedButton(onClick = { nav.importInto(accountId) }) { Text("Import bank file") }
+                OutlinedButton(onClick = { reconciling = true }) { Text("Reconcile") }
             }
             if (fileDrop) {
                 Text(
@@ -246,6 +250,17 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                 )
             }
             if (account?.type?.isLoan == true) LoanSummary(account, data) { editingAccount = true }
+            account?.lastReconciled?.let { date ->
+                val bal = account.reconciledBalance
+                Text(
+                    "Last reconciled ${date.short()}" + (bal?.let {
+                        " at " + if ((account.type.isCredit || account.type.isLoan) && it < 0) "${Money.format(-it)} owed" else Money.format(it)
+                    } ?: "") + " · 🔒 transactions up to then are locked",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                )
+            }
             cardInfo?.let { c ->
                 Text(
                     when {
@@ -324,7 +339,16 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             onDismiss = { paying = null },
         )
     }
-    if (editingAccount && account != null) {
+    if (reconciling && account != null) {
+        ReconcileDialog(
+            data = data,
+            account = account,
+            onToggleCleared = { id, on -> store.budget.setCleared(id, on) },
+            onReconcile = { date, balance, adjust -> store.budget.reconcile(account.id, date, balance, adjust); reconciling = false },
+            onDismiss = { reconciling = false },
+        )
+    }
+        if (editingAccount && account != null) {
         AccountDialog(
             initial = account,
             newId = store.budget::newId,
@@ -404,12 +428,19 @@ private fun TxnRow(
             Text(Money.format(t.amount), color = amountColor(t.amount), textAlign = TextAlign.End)
             if (running != null) Text(Money.format(running), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        IconButton(onClick = onToggleCleared) {
-            Icon(
-                Icons.Default.CheckCircle,
-                if (t.cleared) "Cleared" else "Uncleared",
-                tint = if (t.cleared) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-            )
+        if (t.reconciled) {
+            // Locked by a reconcile; unlock it in the transaction form if it needs changing.
+            Box(Modifier.width(48.dp), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Lock, "Reconciled", tint = MaterialTheme.colorScheme.primary)
+            }
+        } else {
+            IconButton(onClick = onToggleCleared) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    if (t.cleared) "Cleared" else "Uncleared",
+                    tint = if (t.cleared) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                )
+            }
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))

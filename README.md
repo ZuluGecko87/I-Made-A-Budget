@@ -55,6 +55,16 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   - the bank account is remembered, so the next file from it goes to the right account.
 - **Sync** through OneDrive, Google Drive or Dropbox.
 
+## Reconciling
+
+**Reconcile** on an account: enter the statement date and the balance the bank shows (for cards
+and loans, the amount owed). IMAB compares it with the **cleared** transactions up to that date and
+shows the difference; tick uncleared transactions that are on the statement and it updates as you
+go. When it matches, finishing locks those transactions (🔒) and records the date and balance; if it
+won't match, you can add a "Reconciliation adjustment" for the difference. A locked transaction
+can be unlocked in its form. When nothing has been imported into an account yet, the first import
+starts the day after its last reconcile.
+
 ## Reports
 
 The **Reports** tab, for a month, a year or the last 12 months (‹ › to step back and forth):

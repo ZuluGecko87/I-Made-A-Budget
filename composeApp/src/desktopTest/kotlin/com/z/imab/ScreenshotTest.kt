@@ -203,7 +203,17 @@ class ScreenshotTest {
             File(out, "dialog-payee-open.png").writeBytes(scene.render(900_000_000).encodeToData(EncodedImageFormat.PNG)!!.bytes)
             scene.close()
         }
-        dialogShot("dialog-edit-loan") {
+        // Reconcile: Everyday Checking with the statement $5 off, then matching.
+        val chkCleared = b.data.transactionsByAccount["chk"].orEmpty().filter { it.cleared && it.date <= today() }.sumOf { it.amount }
+        dialogShot("dialog-reconcile-off") {
+            com.z.imab.ui.ReconcileDialog(b.data, b.data.accounts.getValue("chk"), { _, _ -> }, { _, _, _ -> }, {}, initialBalanceText = com.z.imab.model.Money.toInput(chkCleared - 500))
+        }
+        dialogShot("dialog-reconcile-match") {
+            com.z.imab.ui.ReconcileDialog(b.data, b.data.accounts.getValue("chk"), { _, _ -> }, { _, _, _ -> }, {}, initialBalanceText = com.z.imab.model.Money.toInput(chkCleared))
+        }
+        b.reconcile("chk", today(), chkCleared, adjust = false)
+        nav.openAccount("chk"); shot("register-reconciled-wide", 1800, 1100)
+                dialogShot("dialog-edit-loan") {
             com.z.imab.ui.AccountDialog(b.data.accounts.getValue("home"), { "x" }, currentBalance = b.data.balance("home"), onSave = { _, _, _ -> }, onDelete = {}, onDismiss = {})
         }
         store.setTheme("dark")

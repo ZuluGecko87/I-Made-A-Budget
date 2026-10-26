@@ -50,6 +50,9 @@ data class Account(
     val sortOrder: Int = 0,
     /** For loans and mortgages: used to split each payment into principal, interest and escrow. */
     val loan: LoanTerms? = null,
+    /** Statement date of the last reconcile, and the balance the bank showed then. */
+    val lastReconciled: LocalDate? = null,
+    val reconciledBalance: Long? = null,
 ) {
     /**
      * Whether this account's money counts in the budget. Loans never do, even if marked otherwise:
@@ -172,6 +175,8 @@ data class Transaction(
     val loanSplit: LoanSplit? = null,
     /** Set on the principal entry in a loan account: the payment it came from. */
     val loanPaymentOf: String? = null,
+    /** Confirmed against a bank statement in a reconcile. */
+    val reconciled: Boolean = false,
 )
 
 @Serializable

@@ -325,13 +325,16 @@ private fun StatementHeader(st: StatementState, data: BudgetData, budget: Budget
 /** How far back to import: a start date on the first import, "since last import" afterwards. */
 @Composable
 private fun DateWindow(st: StatementState, lastImport: LocalDate?, budget: Budget) {
+    val reconciledOn = st.accountId?.let { budget.data.accounts[it]?.lastReconciled }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (lastImport == null) {
             Text(
-                if (st.createdAccountId != null) {
-                    "First import into this account. Choose how far back to go — the starting balance adjusts so the account matches the bank."
-                } else {
-                    "First import into this account. Choose how far back to go."
+                when {
+                    st.createdAccountId != null ->
+                        "First import into this account. Choose how far back to go — the starting balance adjusts so the account matches the bank."
+                    reconciledOn != null ->
+                        "First import into this account. It starts the day after your last reconcile (${reconciledOn.short()}); everything before that is already confirmed."
+                    else -> "First import into this account. Choose how far back to go."
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
