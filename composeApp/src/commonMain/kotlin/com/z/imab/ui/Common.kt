@@ -150,7 +150,7 @@ fun AvailablePill(cents: Long, modifier: Modifier = Modifier, creditOverspending
     }
 }
 
-data class PickerOption<T>(val value: T, val label: String, val isHeader: Boolean = false)
+data class PickerOption<T>(val value: T, val label: String, val isHeader: Boolean = false, val enabled: Boolean = true)
 
 /** A dropdown that behaves the same on desktop and phone. */
 @Composable
@@ -189,6 +189,7 @@ fun <T> Picker(
                     DropdownMenuItem(
                         text = { Text(opt.label, fontWeight = if (opt.value == selected) FontWeight.Bold else null) },
                         onClick = { onSelect(opt.value); open = false },
+                        enabled = opt.enabled,
                     )
                 }
             }
@@ -229,10 +230,14 @@ fun categoryOptions(data: BudgetData, excludeAccountId: String?, allowTransfers:
         cats.forEach { out += PickerOption(Choice.category(it.id), it.name) }
     }
     if (allowTransfers) {
-        val accounts = data.sortedAccounts.filter { it.id != excludeAccountId && !it.closed }
-        if (accounts.isNotEmpty()) {
+        val accounts = data.sortedAccounts.filter { !it.closed }
+        if (accounts.any { it.id != excludeAccountId }) {
             out += PickerOption("", "Transfer to/from", isHeader = true)
-            accounts.forEach { out += PickerOption(Choice.transfer(it.id), "⇄ ${it.name}") }
+            // The transaction's own account is shown but can't be picked, so every account is visible.
+            accounts.forEach {
+                val own = it.id == excludeAccountId
+                out += PickerOption(Choice.transfer(it.id), "⇄ ${it.name}" + if (own) " (this account)" else "", enabled = !own)
+            }
         }
     }
     return out
