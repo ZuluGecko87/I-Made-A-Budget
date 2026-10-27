@@ -376,6 +376,14 @@ class Budget(
 
     fun saveCategory(c: Category) = edit { put(Kinds.CATEGORY, c.id, c, Category.serializer()) }
 
+    /** Adds a category at the end of [groupId] and returns its id. */
+    fun addCategory(groupId: String, name: String): String {
+        val id = newId()
+        val order = (data.categoriesIn(groupId).maxOfOrNull { it.sortOrder } ?: -1) + 1
+        saveCategory(Category(id, groupId, name.trim(), order))
+        return id
+    }
+
     fun deleteCategory(id: String) = edit { deleteCategoryIn(this, id) }
 
     /** Deleting a category leaves its transactions uncategorized and returns its money to Ready to Assign. */

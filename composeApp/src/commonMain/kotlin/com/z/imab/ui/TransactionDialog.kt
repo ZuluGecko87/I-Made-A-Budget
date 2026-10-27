@@ -68,7 +68,7 @@ private fun TxnFields(form: TxnForm, data: BudgetData, dateLabel: String) {
     if (!isTransfer) {
         PayeeField(form.payee, { form.payee = it }, data, Modifier.fillMaxWidth())
     }
-    Picker("Category or transfer", categoryOptions(data, form.accountId), form.choice, { form.choice = it }, Modifier.fillMaxWidth())
+    CategoryPicker("Category or transfer", data, form.accountId, form.choice, { form.choice = it }, Modifier.fillMaxWidth())
     if (isTransfer) {
         val other = Choice.transferId(form.choice)
         if (data.isOnBudget(form.accountId) == data.isOnBudget(other)) {

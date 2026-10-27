@@ -37,6 +37,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.delay
@@ -147,7 +148,9 @@ fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean
             }
             Box(modifier.fillMaxSize()) {
                 if (loaded) {
-                    MainLayout(store, pickers, nav)
+                    CompositionLocalProvider(LocalCreateCategory provides { name, groupId -> store.budget.addCategory(groupId, name) }) {
+                        MainLayout(store, pickers, nav)
+                    }
                     if (nav.dragging) DropOverlay(store, nav)
                     nav.dropError?.let { message ->
                         AlertDialog(

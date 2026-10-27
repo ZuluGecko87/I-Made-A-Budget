@@ -487,9 +487,10 @@ private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, 
             val usual = if (match != null) ImportAction.MATCH else ImportAction.ADD
             FilterChip(skip, { onChange(row.copy(action = if (skip) usual else ImportAction.SKIP)) }, label = { Text("Skip") })
             if (match == null) {
-                Picker(
+                CategoryPicker(
                     "Category",
-                    categoryOptions(data, accountId),
+                    data,
+                    accountId,
                     Choice.of(row.categoryId, row.transferAccountId),
                     {
                         val transfer = Choice.transferId(it)

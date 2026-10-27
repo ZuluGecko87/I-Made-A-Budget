@@ -237,6 +237,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         onAvailable = { assigningToCover = mb.category(c.id).available < 0; assigningMove = false; assigning = c.id to c.name },
                         onMoveMoney = { assigningToCover = false; assigningMove = true; assigning = c.id to c.name },
                         onAddTransaction = { editingTxn = newTransaction(c.id) },
+                        onNewCategory = { addingTo = g },
                     )
                 }
             }
@@ -357,8 +358,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
     }
     addingTo?.let { g ->
         TextInputDialog("New category in ${g.name}", onDismiss = { addingTo = null }) { name ->
-            val order = (data.categoriesIn(g.id).maxOfOrNull { it.sortOrder } ?: -1) + 1
-            store.budget.saveCategory(Category(store.budget.newId(), g.id, name, order))
+            store.budget.addCategory(g.id, name)
             addingTo = null
         }
     }
@@ -469,6 +469,7 @@ private fun CategoryRow(
     onAvailable: () -> Unit,
     onAddTransaction: () -> Unit,
     onMoveMoney: () -> Unit,
+    onNewCategory: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -516,6 +517,7 @@ private fun CategoryRow(
                 DropdownMenuItem(text = { Text("Show activity") }, onClick = { menu = false; onActivity() })
                 DropdownMenuItem(text = { Text(if (goal == null) "Set goal…" else "Edit goal…") }, onClick = { menu = false; onGoal() })
                 DropdownMenuItem(text = { Text("Edit category…") }, onClick = { menu = false; onRename() })
+                DropdownMenuItem(text = { Text("New category in this group…") }, onClick = { menu = false; onNewCategory() })
                 DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })
             }
         }

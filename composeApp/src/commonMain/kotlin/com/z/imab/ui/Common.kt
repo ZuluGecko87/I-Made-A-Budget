@@ -20,8 +20,13 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.ui.window.PopupProperties
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -163,6 +168,8 @@ private fun <T> PickerDialog(
     selected: T,
     onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
+    createLabel: String? = null,
+    onCreate: ((query: String) -> Unit)? = null,
 ) {
     var query by remember { mutableStateOf("") }
     val q = query.trim().lowercase()
@@ -193,6 +200,16 @@ private fun <T> PickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 8.dp)) {
+                    if (onCreate != null && createLabel != null) {
+                        item {
+                            Text(
+                                "+ $createLabel" + (query.trim().takeIf { it.isNotEmpty() }?.let { " \"$it\"" } ?: "…"),
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.fillMaxWidth().clickable { onCreate(query.trim()) }.padding(vertical = 12.dp),
+                            )
+                        }
+                    }
                     items(shown.size) { i ->
                         val opt = shown[i]
                         if (opt.isHeader) {
@@ -235,6 +252,8 @@ fun <T> Picker(
     selected: T,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    createLabel: String? = null,
+    onCreate: ((query: String) -> Unit)? = null,
 ) {
     var open by remember { mutableStateOf(false) }
     val current = options.firstOrNull { !it.isHeader && it.value == selected }?.label ?: "Choose…"
@@ -253,7 +272,10 @@ fun <T> Picker(
         // Long lists open as a dialog with search: a dropdown can run under the phone's navigation
         // bar, leaving its last items out of reach.
         if (open && options.count { !it.isHeader } > LONG_LIST) {
-            PickerDialog(label, options, selected, onSelect = { onSelect(it); open = false }, onDismiss = { open = false })
+            PickerDialog(
+                label, options, selected, onSelect = { onSelect(it); open = false }, onDismiss = { open = false },
+                createLabel = createLabel, onCreate = onCreate?.let { create -> { q: String -> open = false; create(q) } },
+            )
         }
         DropdownMenu(expanded = open && options.count { !it.isHeader } <= LONG_LIST, onDismissRequest = { open = false }) {
             options.forEach { opt ->
@@ -272,6 +294,12 @@ fun <T> Picker(
                         enabled = opt.enabled,
                     )
                 }
+            }
+            if (onCreate != null && createLabel != null) {
+                DropdownMenuItem(
+                    text = { Text("+ $createLabel…", color = MaterialTheme.colorScheme.primary) },
+                    onClick = { open = false; onCreate("") },
+                )
             }
         }
     }
@@ -321,6 +349,57 @@ fun categoryOptions(data: BudgetData, excludeAccountId: String?, allowTransfers:
         }
     }
     return out
+}
+
+/**
+ * Creates a category (name, group id) and returns its id; provided by the app so any category
+ * picker can offer "+ New category". Null where categories can't be added.
+ */
+val LocalCreateCategory = staticCompositionLocalOf<((String, String) -> String)?> { null }
+
+/** Category (or transfer) picker that can also create a new category on the spot. */
+@Composable
+fun CategoryPicker(
+    label: String,
+    data: BudgetData,
+    excludeAccountId: String?,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val create = LocalCreateCategory.current
+    var newName by remember { mutableStateOf<String?>(null) }
+    Picker(
+        label, categoryOptions(data, excludeAccountId), selected, onSelect, modifier,
+        createLabel = if (create != null && data.groups.isNotEmpty()) "New category" else null,
+        onCreate = { newName = it },
+    )
+    newName?.let { initial ->
+        NewCategoryDialog(data, initial, onDismiss = { newName = null }) { name, groupId ->
+            create?.let { onSelect(Choice.category(it(name, groupId))) }
+            newName = null
+        }
+    }
+}
+
+@Composable
+fun NewCategoryDialog(data: BudgetData, initialName: String, onDismiss: () -> Unit, onSave: (name: String, groupId: String) -> Unit) {
+    var name by remember { mutableStateOf(initialName) }
+    var groupId by remember { mutableStateOf(data.sortedGroups.firstOrNull()?.id.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New category") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Picker("Group", data.sortedGroups.map { PickerOption(it.id, it.name) }, groupId, { groupId = it }, Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(name.trim(), groupId) }, enabled = name.isNotBlank() && groupId.isNotEmpty()) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
@@ -429,42 +508,80 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Compos
 }
 
 /**
- * Payee entry with suggestions: as you type it lists payees used before (most-used first) to pick
- * from, and always offers to add what you typed as a new payee.
+ * Payee chooser: a button that opens a pop-up with a search box, so the keyboard doesn't cover the
+ * suggestions. Pick a payee you've used, or add whatever you typed as a new one.
  */
 @Composable
 fun PayeeField(value: String, onChange: (String) -> Unit, data: BudgetData, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
-    val typed = value.trim()
-    val matches = remember(data, typed) { data.searchPayees(typed) }
-    val exact = matches.any { it.equals(typed, ignoreCase = true) }
-    Box(modifier) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = { onChange(it); open = true },
-            label = { Text("Payee") },
-            placeholder = { Text("Search or add a payee") },
-            singleLine = true,
-            trailingIcon = {
-                IconButton(onClick = { open = !open }) { Icon(Icons.Default.ArrowDropDown, "Show payees") }
-            },
-            modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused && typed.isEmpty()) open = true },
-        )
-        DropdownMenu(
-            expanded = open && (matches.isNotEmpty() || typed.isNotEmpty()),
-            onDismissRequest = { open = false },
-            // Don't take focus, so typing continues in the field while suggestions show.
-            properties = PopupProperties(focusable = false),
-        ) {
-            matches.filterNot { it == typed }.forEach { p ->
-                DropdownMenuItem(text = { Text(p) }, onClick = { onChange(p); open = false })
-            }
-            if (typed.isNotEmpty() && !exact) {
-                DropdownMenuItem(
-                    text = { Text("+ Add \"$typed\" as a new payee", color = MaterialTheme.colorScheme.primary) },
-                    onClick = { onChange(typed); open = false },
-                )
-            }
+    OutlinedButton(onClick = { open = true }, modifier = modifier, shape = RoundedCornerShape(6.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text("Payee", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                value.ifBlank { "Choose or add a payee" },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (value.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+            )
         }
+        Icon(Icons.Default.ArrowDropDown, null)
     }
+    if (open) PayeeDialog(value, data, onPick = { onChange(it); open = false }, onDismiss = { open = false })
+}
+
+@Composable
+private fun PayeeDialog(current: String, data: BudgetData, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    var query by remember { mutableStateOf(current) }
+    val typed = query.trim()
+    val matches = remember(data, typed) { data.searchPayees(typed, limit = 100) }
+    val exact = matches.firstOrNull { it.equals(typed, ignoreCase = true) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Payee") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    query, { query = it },
+                    placeholder = { Text("Search or type a new payee") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Words),
+                    // Enter picks the matching payee, or adds what was typed.
+                    keyboardActions = KeyboardActions(onDone = { if (typed.isNotEmpty()) onPick(exact ?: typed) }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                )
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp).padding(top = 8.dp)) {
+                    if (typed.isNotEmpty() && exact == null) {
+                        item {
+                            Text(
+                                "+ Add \"$typed\" as a new payee",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.fillMaxWidth().clickable { onPick(typed) }.padding(vertical = 12.dp),
+                            )
+                        }
+                    }
+                    items(matches.size) { i ->
+                        val p = matches[i]
+                        Text(
+                            p,
+                            fontWeight = if (p == current) FontWeight.Bold else null,
+                            modifier = Modifier.fillMaxWidth().clickable { onPick(p) }.padding(vertical = 12.dp),
+                        )
+                    }
+                    if (matches.isEmpty() && typed.isEmpty()) {
+                        item { Text("No payees yet. Type one above.", modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            Row {
+                if (current.isNotBlank()) TextButton(onClick = { onPick("") }) { Text("No payee") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
 }

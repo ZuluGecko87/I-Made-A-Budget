@@ -108,7 +108,7 @@ private fun RuleDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Picker("Set category or transfer", categoryOptions(data, null), choice, { choice = it }, Modifier.fillMaxWidth())
+                CategoryPicker("Set category or transfer", data, null, choice, { choice = it }, Modifier.fillMaxWidth())
                 if (data.loanAccounts.isNotEmpty() && transfer == null) {
                     Picker(
                         "Loan payment",

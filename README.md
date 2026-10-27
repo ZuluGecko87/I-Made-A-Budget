@@ -42,9 +42,11 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   (lowering an amount is always allowed).
 - On a phone each category shows what was spent under its name; tap it (or *Show activity* in the
   category menu) to see the transactions behind it.
-- **Payees**: the payee field suggests payees you've used before as you type (most-used first) and
-  always offers to add a new one. Settings → Payees lets you rename a payee everywhere, or merge
+- **Payees**: tap the payee to open a pop-up: search the payees you've used (most-used first), or type a
+  new one and pick *+ Add … as a new payee* (Enter does the same). Settings → Payees lets you rename a payee everywhere, or merge
   a misspelling into the right one.
+- **New categories on the spot**: every category list has *+ New category* (name and group), which creates it
+  and picks it; a category's ⋮ menu has *New category in this group…*.
 - Tap a category's name to rename it, move it to another group, or set its goal; tap its numbers to assign money.
 - Add a transaction from the Budget screen: the **Add transaction** button, or a category's menu (or its activity list) to start one with that category filled in; pick the account it was paid from.
 - Add a transaction from the account list with the **+** next to each account, or inside an account.
