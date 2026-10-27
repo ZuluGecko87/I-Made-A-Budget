@@ -54,6 +54,7 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   - an upcoming scheduled transaction the bank already posted is matched and the schedule moves on;
   - new transactions come in **uncategorized** unless an auto-categorize rule matches (tick *Always use this for payees containing …* on a row, or manage rules in Settings);
   - **Add transaction** on a row adds that one straight away (with the category picked on the row) and takes it off the list; **Import** adds the rest;
+  - **Merge with what you entered** merges straight away: what you entered (payee, category, memo) stays as the one cleared transaction, with the bank's date, labelled **Merged** in the account;
   - the bank account is remembered, so the next file from it goes to the right account.
 - **Sync** through OneDrive, Google Drive or Dropbox.
 

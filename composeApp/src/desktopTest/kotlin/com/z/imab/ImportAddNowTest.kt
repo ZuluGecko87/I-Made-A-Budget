@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import com.z.imab.data.BudgetStore
 import com.z.imab.model.Account
+import com.z.imab.model.Transaction
 import com.z.imab.platform.PickedFile
 import com.z.imab.platform.Pickers
 import com.z.imab.platform.Storage
@@ -20,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** Clicks through the Import screen the way a person would after dropping a bank file. */
 @OptIn(ExperimentalTestApi::class)
@@ -59,6 +61,35 @@ class ImportAddNowTest {
 
         assertEquals(before + 1, store.budget.data.transactionsByAccount["chk"].orEmpty().size)
         assertEquals(rows - 1, onAllNodesWithText("Add transaction").fetchSemanticsNodes().size)
-        onNodeWithText("1 transaction(s) already added.").assertExists()
+        onNodeWithText("1 added already.").assertExists()
+    }
+
+    @Test
+    fun mergeKeepsOneClearedTransactionLabelledMerged() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        val b = store.budget
+        b.saveAccount(Account("chk", "Everyday Checking"), 0, LocalDate(2026, 9, 1))
+        // Entered by hand a day after the bank's Kroger charge on 10/01.
+        b.saveTransaction(Transaction("hand", "chk", LocalDate(2026, 10, 2), -4512, "Kroger", categoryId = "seed-groceries"))
+        val nav = NavState().apply { openAccount("chk") }
+        setContent { App(store, NoPickers, nav, showSplash = false) }
+        nav.importFile(PickedFile("Checking_Oct.qbo", Samples.QBO_CHECKING))
+        waitForIdle()
+
+        // Kroger matches what was entered; only the two new rows ask for a category.
+        assertEquals(2, onAllNodesWithText("Category").fetchSemanticsNodes().size)
+        onNodeWithText("Merge with what you entered").performClick()
+        waitForIdle()
+
+        val kroger = b.data.transactionsByAccount["chk"].orEmpty().filter { it.amount == -4512L }
+        assertEquals(1, kroger.size)
+        val t = kroger.single()
+        assertEquals("hand", t.id)
+        assertTrue(t.merged && t.cleared)
+        assertEquals("seed-groceries", t.categoryId)
+        assertEquals(LocalDate(2026, 10, 1), t.date)
+        onNodeWithText("Merge with what you entered").assertDoesNotExist()
+        onNodeWithText("1 merged or matched already.").assertExists()
     }
 }

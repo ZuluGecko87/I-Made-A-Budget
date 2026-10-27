@@ -2,6 +2,7 @@ package com.z.imab.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
@@ -402,7 +404,10 @@ private fun TxnRow(
     ) {
         Text(t.date.short(), Modifier.width(72.dp), style = MaterialTheme.typography.bodySmall)
         Column(Modifier.weight(1f)) {
-            Text(data.payeeLabel(t), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(data.payeeLabel(t), Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+                if (t.merged) MergedLabel()
+            }
             val needs = data.needsCategory(t)
             val sub = buildString {
                 if (showAccount) append(data.accountName(t.accountId)).append(" · ")
@@ -444,6 +449,19 @@ private fun TxnRow(
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+}
+
+/** Marks a transaction you entered that was merged with the bank's copy of it. */
+@Composable
+private fun MergedLabel() {
+    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(50)) {
+        Text(
+            "Merged",
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+        )
+    }
 }
 
 @Composable

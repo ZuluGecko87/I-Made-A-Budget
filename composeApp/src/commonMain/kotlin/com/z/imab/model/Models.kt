@@ -177,6 +177,8 @@ data class Transaction(
     val loanPaymentOf: String? = null,
     /** Confirmed against a bank statement in a reconcile. */
     val reconciled: Boolean = false,
+    /** Entered by hand, then merged with the same transaction from a bank import. */
+    val merged: Boolean = false,
 )
 
 @Serializable

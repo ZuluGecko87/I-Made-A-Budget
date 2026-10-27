@@ -493,6 +493,7 @@ class Budget(
             transferAccountId = if (enteredHasJob) entered.transferAccountId else bank.transferAccountId,
             transferPairId = if (enteredHasJob) entered.transferPairId else bank.transferPairId,
             cleared = true,
+            merged = true,
             importId = bank.importId,
             reconciled = entered.reconciled || bank.reconciled,
             loanSplit = entered.loanSplit ?: bank.loanSplit.takeIf { !enteredHasJob },
@@ -589,6 +590,7 @@ class Budget(
                                     date = row.source.date,
                                     importId = row.importId,
                                     cleared = true,
+                                    merged = true,
                                     payee = existing.payee.ifBlank { row.payee },
                                 )
                             )

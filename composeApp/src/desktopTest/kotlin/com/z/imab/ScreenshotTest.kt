@@ -141,6 +141,11 @@ class ScreenshotTest {
         nav.openAccount("chk")
         nav.importFile(PickedFile("gas.qbo", Samples.QBO_CHECKING.replace("<TRNAMT>-1200.00", "<TRNAMT>-25.00").replace("20261005", "20261012").replace("20261005001", "GAS1")))
         shot("import-merge-wide", 1800, 1300)
+        run {
+            val gas = com.z.imab.importer.OfxParser.parse(Samples.QBO_CHECKING.replace("<TRNAMT>-1200.00", "<TRNAMT>-25.00").replace("20261005", "20261012").replace("20261005001", "GAS1")).single()
+            b.applyImport("chk", null, ImportMatcher.analyze(gas.transactions, "chk", b.data).filter { it.kind == com.z.imab.importer.MatchKind.MATCH_EXISTING })
+        }
+        nav.openAccount("chk"); shot("register-merged-wide", 1800, 1100); shot("register-merged-phone", 620, 1300)
 
         // Mortgage: a loan account with terms, then a monthly payment arriving from the bank.
         b.saveAccount(

@@ -74,6 +74,7 @@ class MergeTest {
         assertEquals(LocalDate(2026, 10, 3), merged.date, "uses the bank's date")
         assertEquals("A", merged.importId)
         assertTrue(merged.cleared)
+        assertTrue(merged.merged, "labelled Merged")
         assertTrue(MergeFinder.find(b.data, "chk").isEmpty())
 
         // Importing the same bank file again now sees it as a duplicate.
