@@ -24,6 +24,13 @@ data class CardPayment(
     val owed: Long,
     /** Money in the payment category this month. */
     val available: Long,
+    /**
+     * This month: money that moved into the payment category from the categories of card spending
+     * (net of refunds). It's part of the payment category's activity, not its assigned amount.
+     */
+    val fromSpending: Long = 0,
+    /** This month: payments made to the card (net of any balance transfers out). */
+    val paid: Long = 0,
 ) {
     /** Debt that no budgeted money is set aside for yet. */
     val underfunded: Long get() = maxOf(0, owed - maxOf(0, available))
@@ -129,6 +136,8 @@ object BudgetMath {
         val returnedBy = HashMap<YearMonth, Long>()
         val rollsOver = data.categories.mapValues { (_, c) -> c.goal?.rollsOver ?: true }
         var result: Map<String, CategoryMonth> = emptyMap()
+        var resultFromSpending: Map<String, Long> = emptyMap()
+        var resultPaid: Map<String, Long> = emptyMap()
         val firstMonth = (activity.keys + assigned.keys).minOrNull()
 
         var m = firstMonth ?: month
@@ -180,7 +189,11 @@ object BudgetMath {
 
             cashOverspentBy[m] = cashOverspent
             returnedBy[m] = returned
-            if (m == month) result = months
+            if (m == month) {
+                result = months
+                resultFromSpending = cards.associateWith { (intoPayment[it] ?: 0) - (act.cardUnbudgeted[it] ?: 0) }
+                resultPaid = cards.associateWith { act.cardTransfers[it] ?: 0 }
+            }
             m += 1
         }
 
@@ -200,7 +213,10 @@ object BudgetMath {
             readyToAssign = inflows - assignedEver - pastOverspending + pastReturned,
             categories = categories,
             cards = paymentIds.map { (card, pid) ->
-                CardPayment(card, pid, owed = -data.balance(card), available = categories.getValue(pid).available)
+                CardPayment(
+                    card, pid, owed = -data.balance(card), available = categories.getValue(pid).available,
+                    fromSpending = resultFromSpending[card] ?: 0, paid = resultPaid[card] ?: 0,
+                )
             },
             incomeThisMonth = income,
             overspentLastMonth = cashOverspentBy[month - 1] ?: 0,

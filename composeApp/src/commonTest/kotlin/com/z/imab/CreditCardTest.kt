@@ -246,4 +246,28 @@ class CreditCardTest {
         b.saveAccount(Account("store", "Store card", AccountType.CREDIT_CARD, onBudget = false))
         assertEquals(listOf("visa"), b.month(oct).cards.map { it.accountId })
     }
+
+    @Test
+    fun paymentCategoryShowsAssignedSpendingAndPaymentsSeparately() {
+        // Like a real card: $6,123.45 owed to start, $5,000 assigned toward it, then spending and a payment.
+        val b = setup()
+        b.saveAccount(Account("chk2", "Paycheck"), 600000, LocalDate(2026, 9, 30))
+        b.saveTransaction(Transaction("start", "visa", LocalDate(2026, 10, 1), -612345, "Starting Balance", categoryId = PREEXISTING_DEBT))
+        b.setAssigned(oct, visaPay, 500000)
+        b.setAssigned(oct, dining, 5000)
+        b.spend("s1", "visa", 2, 5000, dining)
+        b.spend("s2", "visa", 3, 2500, groceries)
+        b.payCard("pay", 4, 540000)
+
+        val mb = b.month(oct)
+        val card = mb.cards.single { it.accountId == "visa" }
+        val cm = mb.category(visaPay)
+        assertEquals(500000, cm.assigned, "assigned is only what was assigned to the payment category")
+        assertEquals(7500, card.fromSpending, "card spending in Dining Out and Groceries moved in")
+        assertEquals(540000, card.paid)
+        assertEquals(7500 - 540000, cm.activity)
+        assertEquals(500000 + 7500 - 540000, cm.available)
+        assertEquals(612345 + 7500 - 540000, card.owed)
+        assertBalanced(b, oct)
+    }
 }

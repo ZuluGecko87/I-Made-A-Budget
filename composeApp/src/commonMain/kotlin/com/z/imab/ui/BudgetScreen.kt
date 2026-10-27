@@ -665,8 +665,22 @@ internal fun AssignDialog(
                 }
                 Text("Activity ${Money.format(current.activity)} · Available ${Money.format(current.available)}", style = MaterialTheme.typography.bodySmall)
                 if (card != null) {
+                    // Assigned is only what you assign here; card spending arrives as activity.
+                    val parts = buildList {
+                        add("${Money.format(current.assigned)} assigned")
+                        if (card.fromSpending != 0L) add("${if (card.fromSpending > 0) "+" else "−"} ${Money.format(kotlin.math.abs(card.fromSpending))} from spending on the card")
+                        if (card.paid != 0L) add("${if (card.paid > 0) "−" else "+"} ${Money.format(kotlin.math.abs(card.paid))} paid")
+                    }
+                    val carried = current.available - current.assigned - current.activity
                     Text(
-                        "You owe ${Money.format(card.owed)} on this card. Money assigned here is set aside to pay it.",
+                        (if (carried != 0L) "${Money.format(carried)} from last month + " else "") +
+                            parts.joinToString(" ") + " = ${Money.format(current.available)} available.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "You owe ${Money.format(card.owed)} on this card" +
+                            (if (card.underfunded > 0) "; ${Money.format(card.underfunded)} of it isn't set aside yet." else ", and it's all set aside.") +
+                            " Card spending in a category moves that money here on its own; assign here only to pay down older debt.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -756,6 +770,12 @@ private fun CardGroupRow(totals: List<CategoryMonth>, wide: Boolean) {
     }
 }
 
+/** "+$120.00 from spending · $450.00 paid" for this month, or null when there's neither. */
+private fun cardActivityLine(card: CardPayment): String? = listOfNotNull(
+    card.fromSpending.takeIf { it != 0L }?.let { "${if (it > 0) "+" else "−"}${Money.format(kotlin.math.abs(it))} from spending" },
+    card.paid.takeIf { it != 0L }?.let { "${Money.format(kotlin.math.abs(it))} ${if (it > 0) "paid" else "moved out"}" },
+).takeIf { it.isNotEmpty() }?.joinToString(" · ")
+
 @Composable
 private fun CardPaymentRow(
     name: String,
@@ -787,6 +807,9 @@ private fun CardPaymentRow(
                 maxLines = if (wide) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            cardActivityLine(card)?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
         }
         Text(
             Money.format(cm.assigned),
