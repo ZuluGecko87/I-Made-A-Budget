@@ -2,14 +2,17 @@ package com.z.imab
 
 import com.z.imab.platform.PickedFile
 import com.z.imab.ui.NavState
-import java.awt.Window
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.awtTransferable
 import java.awt.datatransfer.DataFlavor
-import java.awt.dnd.DnDConstants
-import java.awt.dnd.DropTarget
-import java.awt.dnd.DropTargetAdapter
-import java.awt.dnd.DropTargetDragEvent
-import java.awt.dnd.DropTargetDropEvent
-import java.awt.dnd.DropTargetEvent
+import java.awt.datatransfer.Transferable
 import java.io.File
 
 private val BANK_EXTENSIONS = setOf("qbo", "qfx", "ofx")
@@ -29,38 +32,42 @@ internal fun bankFileFrom(files: List<File>): Result<PickedFile> {
     }
 }
 
+/** The files in a drag, or null when it isn't carrying files (text, a browser link…). */
+internal fun draggedFiles(t: Transferable): List<File>? =
+    if (!t.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) null
+    else runCatching { (t.getTransferData(DataFlavor.javaFileListFlavor) as List<*>).filterIsInstance<File>() }.getOrNull()
+
 /**
- * Lets bank files be dragged onto the window. A file dropped while an account's transactions are
- * showing is imported into that account; anywhere else it opens the Import screen.
- * AWT calls these on the UI thread, so updating Compose state here is safe.
+ * Handles files dropped on the window: a bank file opens the Import screen with its transactions,
+ * aimed at the account whose transactions are showing; anything else explains what's wrong.
+ * Returns whether the drop was accepted.
  */
-fun installFileDrop(window: Window, nav: NavState) {
-    window.dropTarget = DropTarget(window, DnDConstants.ACTION_COPY, object : DropTargetAdapter() {
-        override fun dragEnter(e: DropTargetDragEvent) {
-            if (e.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-                e.acceptDrag(DnDConstants.ACTION_COPY)
-                nav.dragging = true
-            } else {
-                e.rejectDrag()
-            }
-        }
+internal fun dropFiles(t: Transferable, nav: NavState): Boolean {
+    nav.dragging = false
+    val files = draggedFiles(t) ?: return false
+    bankFileFrom(files)
+        .onSuccess { nav.importFile(it) }
+        .onFailure { nav.dropError = it.message ?: "Couldn't read that file." }
+    return true
+}
 
-        override fun dragExit(e: DropTargetEvent) {
-            nav.dragging = false
+/**
+ * Lets bank files be dragged onto the window. It has to be a Compose drop target: Compose puts its
+ * own AWT drop target on the canvas inside the window, so one set on the window never sees a drop.
+ */
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@Composable
+fun rememberFileDrop(nav: NavState): Modifier {
+    val target = remember(nav) {
+        object : DragAndDropTarget {
+            override fun onEntered(event: DragAndDropEvent) { nav.dragging = true }
+            override fun onExited(event: DragAndDropEvent) { nav.dragging = false }
+            override fun onEnded(event: DragAndDropEvent) { nav.dragging = false }
+            override fun onDrop(event: DragAndDropEvent): Boolean = dropFiles(event.awtTransferable, nav)
         }
-
-        override fun drop(e: DropTargetDropEvent) {
-            nav.dragging = false
-            if (!e.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-                e.rejectDrop()
-                return
-            }
-            e.acceptDrop(DnDConstants.ACTION_COPY)
-            val files = (e.transferable.getTransferData(DataFlavor.javaFileListFlavor) as List<*>).filterIsInstance<File>()
-            e.dropComplete(true)
-            bankFileFrom(files)
-                .onSuccess { nav.importFile(it) }
-                .onFailure { nav.dropError = it.message ?: "Couldn't read that file." }
-        }
-    }, true)
+    }
+    return Modifier.dragAndDropTarget(
+        shouldStartDragAndDrop = { it.awtTransferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor) },
+        target = target,
+    )
 }

@@ -128,7 +128,8 @@ class NavState {
 }
 
 @Composable
-fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean = true) {
+/** [modifier] goes on the app's root; the Mac app uses it to accept dropped bank files. */
+fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean = true, modifier: Modifier = Modifier) {
     val settings by store.settings.collectAsState()
     val dark = when (settings.theme) {
         "light" -> false
@@ -144,7 +145,7 @@ fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean
                 delay(SPLASH_MILLIS)
                 splash = false
             }
-            Box(Modifier.fillMaxSize()) {
+            Box(modifier.fillMaxSize()) {
                 if (loaded) {
                     MainLayout(store, pickers, nav)
                     if (nav.dragging) DropOverlay(store, nav)
