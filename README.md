@@ -43,7 +43,7 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
 - On a phone each category shows what was spent under its name; tap it (or *Show activity* in the
   category menu) to see the transactions behind it.
 - **Payees**: tap the payee to open a pop-up: search the payees you've used (most-used first), or type a
-  new one and pick *+ Add … as a new payee* (Enter does the same). Settings → Payees lets you rename a payee everywhere, or merge
+  new one and pick *+ Add … as a new payee* (Enter does the same). Settings → Payees (the 5 most-used, a search bar, and *Show all* a page at a time) lets you rename a payee everywhere, or merge
   a misspelling into the right one.
 - **New categories on the spot**: every category list has *+ New category* (name and group), which creates it
   and picks it; a category's ⋮ menu has *New category in this group…*.

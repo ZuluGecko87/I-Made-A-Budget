@@ -4,6 +4,11 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.4.1 — 2026-10-27
+
+- Settings → Payees shows the 5 most-used payees under the search bar; *Show all* lists them a page
+  at a time (10, 25 or 50 per page).
+
 ## 1.4.0 — 2026-10-27
 
 - Dragging a bank file onto the Mac window works (it had never received the drop).
