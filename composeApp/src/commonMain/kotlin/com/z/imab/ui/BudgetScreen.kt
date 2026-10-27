@@ -679,7 +679,13 @@ internal fun AssignDialog(
                     )
                     Text(
                         "You owe ${Money.format(card.owed)} on this card" +
-                            (if (card.underfunded > 0) "; ${Money.format(card.underfunded)} of it isn't set aside yet." else ", and it's all set aside.") +
+                            when {
+                                card.underfunded == 0L -> ", and it's all set aside."
+                                else -> ". Not set aside yet: " + listOfNotNull(
+                                    card.startingDebtLeft.takeIf { it > 0 }?.let { "${Money.format(it)} of the debt it started with" },
+                                    card.overspentDebt.takeIf { it > 0 }?.let { "${Money.format(it)} spent beyond what categories had" },
+                                ).joinToString(" and ") + "."
+                            } +
                             " Card spending in a category moves that money here on its own; assign here only to pay down older debt.",
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -797,14 +803,17 @@ private fun CardPaymentRow(
             val status = when {
                 card.owed <= 0 -> "Paid off"
                 card.underfunded == 0L -> "Owe ${Money.format(card.owed)} · ${if (wide) "fully funded" else "covered"}"
-                wide -> "Owe ${Money.format(card.owed)} · ${Money.format(card.underfunded)} not covered"
-                else -> "Owe ${Money.format(card.owed)} · ${Money.format(card.underfunded)} short"
+                else -> listOfNotNull(
+                    "Owe ${Money.format(card.owed)}",
+                    if (card.overspentDebt == 0L) "spending covered" else "${Money.format(card.overspentDebt)} overspent",
+                    card.startingDebtLeft.takeIf { it > 0 }?.let { "${Money.format(it)} ${if (wide) "of starting debt to set aside" else "starting debt"}" },
+                ).joinToString(" · ")
             }
             Text(
                 status,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (card.underfunded > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = if (wide) 1 else 2,
+                maxLines = if (wide) 1 else 3,
                 overflow = TextOverflow.Ellipsis,
             )
             cardActivityLine(card)?.let {

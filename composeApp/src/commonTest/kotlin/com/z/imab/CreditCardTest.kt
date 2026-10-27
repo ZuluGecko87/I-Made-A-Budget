@@ -257,17 +257,31 @@ class CreditCardTest {
         b.setAssigned(oct, dining, 5000)
         b.spend("s1", "visa", 2, 5000, dining)
         b.spend("s2", "visa", 3, 2500, groceries)
-        b.payCard("pay", 4, 540000)
+        b.payCard("pay", 4, 500000)
 
         val mb = b.month(oct)
         val card = mb.cards.single { it.accountId == "visa" }
         val cm = mb.category(visaPay)
         assertEquals(500000, cm.assigned, "assigned is only what was assigned to the payment category")
         assertEquals(7500, card.fromSpending, "card spending in Dining Out and Groceries moved in")
-        assertEquals(540000, card.paid)
-        assertEquals(7500 - 540000, cm.activity)
-        assertEquals(500000 + 7500 - 540000, cm.available)
-        assertEquals(612345 + 7500 - 540000, card.owed)
+        assertEquals(500000, card.paid)
+        assertEquals(7500 - 500000, cm.activity)
+        assertEquals(7500, cm.available)
+        assertEquals(612345 + 7500 - 500000, card.owed)
+        // What isn't set aside is the starting debt the $5,000 didn't reach, not the spending.
+        assertEquals(112345, card.underfunded)
+        assertEquals(112345, card.startingDebtLeft)
+        assertEquals(0, card.overspentDebt)
         assertBalanced(b, oct)
+    }
+
+    @Test
+    fun overspendingOnTheCardIsNotCalledStartingDebt() {
+        val b = setup()
+        b.spend("s1", "visa", 2, 15000, groceries) // only $100 in Groceries
+        val card = b.month(oct).cards.single()
+        assertEquals(5000, card.underfunded)
+        assertEquals(5000, card.overspentDebt)
+        assertEquals(0, card.startingDebtLeft)
     }
 }

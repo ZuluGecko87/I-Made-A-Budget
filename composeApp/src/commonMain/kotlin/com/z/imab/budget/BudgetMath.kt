@@ -31,9 +31,17 @@ data class CardPayment(
     val fromSpending: Long = 0,
     /** This month: payments made to the card (net of any balance transfers out). */
     val paid: Long = 0,
+    /**
+     * Debt the card had when it was added (Pre-existing debt) that hasn't had money assigned
+     * toward it yet. It's part of [underfunded], and isn't caused by spending.
+     */
+    val startingDebtLeft: Long = 0,
 ) {
     /** Debt that no budgeted money is set aside for yet. */
     val underfunded: Long get() = maxOf(0, owed - maxOf(0, available))
+
+    /** The part of [underfunded] that came from spending more than categories had (credit overspending). */
+    val overspentDebt: Long get() = maxOf(0, underfunded - startingDebtLeft)
 }
 
 data class MonthBudget(
@@ -213,9 +221,19 @@ object BudgetMath {
             readyToAssign = inflows - assignedEver - pastOverspending + pastReturned,
             categories = categories,
             cards = paymentIds.map { (card, pid) ->
+                val owed = -data.balance(card)
+                val available = categories.getValue(pid).available
+                // Starting debt not yet paid for by money assigned to the payment category.
+                val startingDebt = -(data.transactionsByAccount[card].orEmpty()
+                    .filter { it.categoryId == PREEXISTING_DEBT && YearMonth.of(it.date) <= month }.sumOf { it.amount })
+                val assignedToCard = data.assignments.values
+                    .filter { it.categoryId == pid && (runCatching { YearMonth.parse(it.month) }.getOrNull()?.let { m -> m <= month } == true) }
+                    .sumOf { it.amount }
+                val underfunded = maxOf(0, owed - maxOf(0, available))
                 CardPayment(
-                    card, pid, owed = -data.balance(card), available = categories.getValue(pid).available,
+                    card, pid, owed = owed, available = available,
                     fromSpending = resultFromSpending[card] ?: 0, paid = resultPaid[card] ?: 0,
+                    startingDebtLeft = minOf(underfunded, maxOf(0, startingDebt - assignedToCard)),
                 )
             },
             incomeThisMonth = income,

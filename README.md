@@ -117,7 +117,8 @@ Credit card and line-of-credit accounts on the budget each get a payment categor
   cash overspending.
 - **Debt you already had** when you added the card is categorized *Pre-existing debt*. It isn't in
   the budget; pay it down by assigning money to the payment category (*Fund whole balance* does it in one step).
-- Each card shows what you owe and how much of it isn't covered by the payment category yet, plus this month's
+- Each card shows what you owe and what isn't set aside yet, split into *overspent* (card spending beyond what its
+  categories had) and *starting debt* (pre-existing debt you haven't assigned money toward), plus this month's
   money in from spending and payments made. *Assigned* on a card is only what you assign to it directly (for
   older debt); money from card spending arrives as activity, and the card's dialog adds it all up.
 - Cash advances add to the payment category (you'll owe them back); balance transfers move it
