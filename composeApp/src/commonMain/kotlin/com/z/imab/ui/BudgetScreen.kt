@@ -569,7 +569,7 @@ internal data class AssignChange(val month: YearMonth, val description: String, 
  * category is chosen; lowering it returns the difference to Ready to Assign or a chosen category.
  */
 @Composable
-private fun AssignDialog(
+internal fun AssignDialog(
     data: BudgetData,
     mb: MonthBudget,
     categoryId: String,
@@ -592,7 +592,8 @@ private fun AssignDialog(
     var newName by remember { mutableStateOf(name) }
     /** Where extra money comes from, or where a reduction goes. null = Ready to Assign. */
     var other by remember { mutableStateOf<String?>(null) }
-    val parsed = if (text.isBlank()) 0L else Money.parse(text)
+    // Arithmetic works here, and a leading operator applies to what's assigned now ("+5" adds $5).
+    val parsed = if (text.isBlank()) 0L else Money.eval(text, current.assigned)
     val delta = (parsed ?: current.assigned) - current.assigned
     fun has(id: String?): Long = if (id == null) free else mb.category(id).available
     fun label(id: String?): String = if (id == null) "Ready to Assign" else data.categoryName(id)
@@ -610,7 +611,7 @@ private fun AssignDialog(
     var moveFrom by remember { mutableStateOf<String?>(if (withMoney) categoryId else CHOOSE) }
     var moveTo by remember { mutableStateOf<String?>(if (withMoney) CHOOSE else categoryId) }
     var moveText by remember { mutableStateOf(if (current.available < 0) Money.toInput(-current.available) else "") }
-    val moveAmount = Money.parse(moveText)
+    val moveAmount = Money.eval(moveText)
     val everything = listOf(categoryId) + ids
     val moveOptions = listOf(PickerOption<String?>(CHOOSE, "Choose…"), rta) +
         everything.map { PickerOption<String?>(it, "${data.categoryName(it)} — ${Money.format(has(it))}") }
@@ -643,7 +644,7 @@ private fun AssignDialog(
                         TextButton(onClick = { val f = moveFrom; moveFrom = moveTo; moveTo = f }) { Text("⇅ Swap") }
                     }
                     Picker("To", moveOptions, moveTo, { moveTo = it }, Modifier.fillMaxWidth())
-                    MoneyField("Amount", moveText, { moveText = it }, Modifier.fillMaxWidth(), isError = moveText.isNotBlank() && moveChosen && !moveValid)
+                    MoneyField("Amount", moveText, { moveText = it }, Modifier.fillMaxWidth(), isError = moveText.isNotBlank() && moveChosen && !moveValid, result = moveAmount)
                     when {
                         !moveChosen -> Text("Choose where the money comes from and where it goes.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         moveFrom == moveTo -> Text("Choose two different places.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -680,7 +681,12 @@ private fun AssignDialog(
                         color = if (current.creditOverspent > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                     )
                 }
-                MoneyField("Assigned", text, { text = it }, Modifier.fillMaxWidth(), isError = parsed == null || tooMuch)
+                MoneyField("Assigned", text, { text = it }, Modifier.fillMaxWidth(), isError = parsed == null || tooMuch, result = parsed)
+                Text(
+                    "You can type a calculation, like ${Money.toInput(current.assigned)} + 5 — or just +5 to add to what's assigned.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 when {
                     delta > 0 -> {
                         Picker("Take the money from", sources, other, { other = it }, Modifier.fillMaxWidth())

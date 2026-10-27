@@ -54,4 +54,77 @@ object Money {
         if (frac.length > 2 && frac[2] >= '5') cents += 1
         return if (negative) -cents else cents
     }
+
+    private const val OPERATORS = "+-*/×÷x"
+
+    /** True when [input] is arithmetic (like "120 + 5") rather than a single amount. */
+    fun isExpression(input: String): Boolean {
+        val s = input.replace(" ", "")
+        return s.drop(1).any { it in OPERATORS } && parse(s) == null
+    }
+
+    /**
+     * Works out an amount typed as arithmetic: "120.00 + 5", "40*3", "(60 + 15) / 2".
+     * With [current], an amount that starts with an operator applies to it, so "+5" adds five
+     * and "-20" takes twenty off. A plain amount ("1,234.56", "(12.00)") parses as usual.
+     * Multiplying and dividing are by plain numbers ("x2", "/3"); the result is rounded to cents.
+     * Returns cents, or null if it can't be worked out.
+     */
+    fun eval(input: String, current: Long? = null): Long? {
+        val s = input.trim().replace(" ", "").replace(" ", "").replace("$", "")
+        if (s.isEmpty()) return null
+        if (current != null && s[0] in OPERATORS) return eval(toInput(current) + s)
+        parse(s)?.let { return it }
+        val dollars = Calc(s).run() ?: return null
+        if (dollars.isNaN() || dollars.isInfinite() || kotlin.math.abs(dollars) > 1e13) return null
+        return kotlin.math.round(dollars * 100).toLong()
+    }
+
+    /** Recursive-descent calculator over dollar amounts. */
+    private class Calc(val s: String) {
+        var i = 0
+
+        fun run(): Double? = expr()?.takeIf { i == s.length }
+
+        private fun expr(): Double? {
+            var v = term() ?: return null
+            while (i < s.length && (s[i] == '+' || s[i] == '-')) {
+                val op = s[i++]
+                val r = term() ?: return null
+                v = if (op == '+') v + r else v - r
+            }
+            return v
+        }
+
+        private fun term(): Double? {
+            var v = factor() ?: return null
+            while (i < s.length && s[i] in "*/×÷x") {
+                val op = s[i++]
+                val r = factor() ?: return null
+                v = if (op == '/' || op == '÷') { if (r == 0.0) return null; v / r } else v * r
+            }
+            return v
+        }
+
+        private fun factor(): Double? {
+            if (i >= s.length) return null
+            return when (s[i]) {
+                '-' -> { i++; factor()?.let { -it } }
+                '+' -> { i++; factor() }
+                '(' -> {
+                    i++
+                    val v = expr() ?: return null
+                    if (i >= s.length || s[i] != ')') return null
+                    i++
+                    v
+                }
+                else -> {
+                    val start = i
+                    while (i < s.length && (s[i].isDigit() || s[i] == '.' || s[i] == ',')) i++
+                    if (i == start) return null
+                    parse(s.substring(start, i))?.let { it / 100.0 }
+                }
+            }
+        }
+    }
 }

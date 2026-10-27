@@ -352,13 +352,26 @@ fun DateField(label: String, date: LocalDate, onChange: (LocalDate) -> Unit, mod
 }
 
 @Composable
-fun MoneyField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, isError: Boolean = false) {
+/**
+ * Amount input. Pass [result] (the worked-out amount) for a field that takes arithmetic such as
+ * "120 + 5"; it's shown under the field while the input is a calculation.
+ */
+fun MoneyField(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false,
+    result: Long? = null,
+) {
+    val showResult = result != null && Money.isExpression(value)
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
         singleLine = true,
         isError = isError,
+        supportingText = if (showResult) ({ Text("= ${Money.format(result!!)}") }) else null,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = modifier,
     )

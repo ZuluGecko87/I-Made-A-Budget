@@ -67,8 +67,8 @@ fun AssignMoneyDialog(
     }
     // Amount to add per category, as typed.
     val adds = remember { mutableStateMapOf<String, String>() }
-    fun added(id: String): Long = adds[id]?.takeIf { it.isNotBlank() }?.let(Money::parse) ?: 0
-    val invalid = adds.values.any { it.isNotBlank() && Money.parse(it) == null }
+    fun added(id: String): Long = adds[id]?.takeIf { it.isNotBlank() }?.let { Money.eval(it) } ?: 0
+    val invalid = adds.values.any { it.isNotBlank() && Money.eval(it) == null }
     val total = rows.sumOf { added(it.id) }
     val left = free - total
     val needing = rows.filter { it.need > 0 }
@@ -168,7 +168,8 @@ private fun AssignRowView(r: AssignRow, adds: MutableMap<String, String>, showGr
                 adds[r.id].orEmpty(),
                 { adds[r.id] = it },
                 Modifier.width(130.dp),
-                isError = adds[r.id]?.let { it.isNotBlank() && Money.parse(it) == null } == true,
+                isError = adds[r.id]?.let { it.isNotBlank() && Money.eval(it) == null } == true,
+                result = adds[r.id]?.let { Money.eval(it) },
             )
         }
         if (r.need > 0) {
