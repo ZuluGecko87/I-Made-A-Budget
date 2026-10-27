@@ -189,12 +189,15 @@ Requires JDK 17 and the Android SDK (`local.properties` → `sdk.dir`).
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 
 ./gradlew :composeApp:run              # run the Mac app from source
-./gradlew :composeApp:packageDmg       # composeApp/build/compose/binaries/main/dmg/IMAB-1.0.0.dmg
+./gradlew :composeApp:packageDmg       # composeApp/build/compose/binaries/main/dmg/IMAB-<version>.dmg
 ./gradlew :composeApp:assembleDebug    # composeApp/build/outputs/apk/debug/composeApp-debug.apk
 ./gradlew :composeApp:installDebug     # install on a connected phone
 ./gradlew :composeApp:desktopTest      # unit + sync tests
 ./gradlew :composeApp:desktopTest -Pscreenshots   # also render screens to composeApp/build/screenshots
 ```
+
+The version is `imab.versionName` / `imab.versionCode` in `gradle.properties` (raise the code by one
+each release); it's shown at the bottom of Settings. Changes are listed in `CHANGELOG.md`.
 
 The splash screen artwork and the app icons are drawn in code (`ui/Splash.kt`). After changing it,
 regenerate the icon files with `./gradlew :composeApp:desktopTest -Picons`, then rebuild

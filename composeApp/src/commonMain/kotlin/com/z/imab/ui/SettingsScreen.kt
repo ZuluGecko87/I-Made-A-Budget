@@ -157,7 +157,7 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers) {
         StartOverCard(store, pickers)
 
         Text(
-            "IMAB — I Made A Budget · v1.0.0",
+            "IMAB — I Made A Budget · v${com.z.imab.BuildInfo.VERSION_NAME}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

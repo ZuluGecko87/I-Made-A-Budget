@@ -9,6 +9,27 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
 }
 
+val appVersionName = providers.gradleProperty("imab.versionName").get()
+val appVersionCode = providers.gradleProperty("imab.versionCode").get().toInt()
+
+/** Writes BuildInfo.kt so the app can show its version. */
+val generateBuildInfo by tasks.registering {
+    val out = layout.buildDirectory.dir("generated/buildinfo")
+    val name = appVersionName
+    val code = appVersionCode
+    inputs.property("versionName", name)
+    inputs.property("versionCode", code)
+    outputs.dir(out)
+    doLast {
+        val file = out.get().file("com/z/imab/BuildInfo.kt").asFile
+        file.parentFile.mkdirs()
+        file.writeText(
+            "package com.z.imab\n\n/** Generated from gradle.properties. */\nobject BuildInfo {\n" +
+                "    const val VERSION_NAME = \"$name\"\n    const val VERSION_CODE = $code\n}\n"
+        )
+    }
+}
+
 kotlin {
     androidTarget {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
@@ -25,6 +46,7 @@ kotlin {
         val desktopMain by getting
         val desktopTest by getting
 
+        commonMain.configure { kotlin.srcDir(generateBuildInfo) }
         commonMain.dependencies {
             implementation(compose.runtime)
             implementation(compose.foundation)
@@ -61,8 +83,8 @@ android {
         applicationId = "com.z.imab"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -82,7 +104,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "IMAB"
-            packageVersion = "1.0.0"
+            packageVersion = appVersionName
             description = "I Made A Budget"
             vendor = "Z"
             modules("java.naming", "jdk.unsupported")
