@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -57,7 +56,7 @@ import com.z.imab.platform.Pickers
 
 /** [inNav] screens get a tab; Import is opened from Accounts (or by dropping a file). */
 enum class Screen(val label: String, val icon: ImageVector, val inNav: Boolean = true) {
-    Budget("Budget", Icons.Default.Home),
+    Budget("Budget", DollarIcon),
     Accounts("Accounts", Icons.Default.AccountBox),
     Goals("Goals", Icons.Default.Star),
     Reports("Reports", Icons.AutoMirrored.Filled.List),
