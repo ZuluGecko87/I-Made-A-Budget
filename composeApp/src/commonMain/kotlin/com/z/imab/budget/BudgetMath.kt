@@ -40,6 +40,12 @@ data class CardPayment(
     /** Debt that no budgeted money is set aside for yet. */
     val underfunded: Long get() = maxOf(0, owed - maxOf(0, available))
 
+    /**
+     * Money set aside for the card minus what's owed: negative when you're short of paying it off,
+     * positive when more is set aside than you owe. What the budget shows as the card's Available.
+     */
+    val coverage: Long get() = available - owed
+
     /** The part of [underfunded] that came from spending more than categories had (credit overspending). */
     val overspentDebt: Long get() = maxOf(0, underfunded - startingDebtLeft)
 }

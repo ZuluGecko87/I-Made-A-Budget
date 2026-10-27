@@ -273,6 +273,18 @@ class CreditCardTest {
         assertEquals(112345, card.startingDebtLeft)
         assertEquals(0, card.overspentDebt)
         assertBalanced(b, oct)
+
+        // On the budget the card reads: Assigned = $5,000 + $75 from categories, Activity = the payment,
+        // Available = set aside − owed, negative because the starting debt isn't all set aside.
+        val shown = com.z.imab.ui.cardFigures(card, cm)
+        assertEquals(507500, shown.assigned)
+        assertEquals(-500000, shown.activity)
+        assertEquals(-112345, shown.available)
+        // Fund it fully and it reads zero; more than owed reads positive.
+        b.setAssigned(oct, visaPay, 500000 + 112345)
+        assertEquals(0, b.month(oct).cards.single { it.accountId == "visa" }.coverage)
+        b.setAssigned(oct, visaPay, 500000 + 112345 + 1000)
+        assertEquals(1000, b.month(oct).cards.single { it.accountId == "visa" }.coverage)
     }
 
     @Test

@@ -193,7 +193,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
         BudgetHeaderRow(wide)
         LazyColumn(Modifier.weight(1f)) {
             if (mb.cards.isNotEmpty()) {
-                item(key = "g-cards") { CardGroupRow(mb.cards.map { mb.category(it.categoryId) }, wide) }
+                item(key = "g-cards") { CardGroupRow(mb.cards.map { cardFigures(it, mb.category(it.categoryId)) }, wide) }
                 items(mb.cards, key = { "p-${it.accountId}" }) { card ->
                     CardPaymentRow(
                         name = data.accountName(card.accountId),
@@ -204,7 +204,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         onPay = { paying = paymentTemplate(data, card.accountId, card.available, store.budget.newId()) },
                         onOpen = { nav.openAccount(card.accountId) },
                         onAvailable = {
-                            assigningToCover = mb.category(card.categoryId).available < 0
+                            assigningToCover = card.coverage < 0
                             assigningMove = false
                             assigning = card.categoryId to data.categoryName(card.categoryId)
                         },
@@ -587,7 +587,12 @@ internal fun AssignDialog(
 ) {
     val current = mb.category(categoryId)
     val card = mb.cards.firstOrNull { it.categoryId == categoryId }
-    val start = if (coverOverspending && current.available < 0) current.assigned - current.available else current.assigned
+    val start = when {
+        // A card short of its balance: assign enough to set aside everything owed.
+        coverOverspending && card != null && card.coverage < 0 -> current.assigned - card.coverage
+        coverOverspending && current.available < 0 -> current.assigned - current.available
+        else -> current.assigned
+    }
     var text by remember { mutableStateOf(if (start == 0L) "" else Money.toInput(start)) }
     var newName by remember { mutableStateOf(name) }
     /** Where extra money comes from, or where a reduction goes. null = Ready to Assign. */
@@ -666,16 +671,21 @@ internal fun AssignDialog(
                 Text("Activity ${Money.format(current.activity)} · Available ${Money.format(current.available)}", style = MaterialTheme.typography.bodySmall)
                 if (card != null) {
                     // Assigned is only what you assign here; card spending arrives as activity.
-                    val parts = buildList {
-                        add("${Money.format(current.assigned)} assigned")
-                        if (card.fromSpending != 0L) add("${if (card.fromSpending > 0) "+" else "−"} ${Money.format(kotlin.math.abs(card.fromSpending))} from spending on the card")
-                        if (card.paid != 0L) add("${if (card.paid > 0) "−" else "+"} ${Money.format(kotlin.math.abs(card.paid))} paid")
-                    }
+                    val shown = cardFigures(card, current)
                     val carried = current.available - current.assigned - current.activity
                     Text(
-                        (if (carried != 0L) "${Money.format(carried)} from last month + " else "") +
-                            parts.joinToString(" ") + " = ${Money.format(current.available)} available.",
+                        "Assigned ${Money.format(shown.assigned)} = ${Money.format(current.assigned)} assigned here" +
+                            (if (card.fromSpending != 0L) " ${if (card.fromSpending > 0) "+" else "−"} ${Money.format(kotlin.math.abs(card.fromSpending))} from the categories of card spending" else "") + ".",
                         style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        (if (carried != 0L) "${Money.format(carried)} from last month + " else "") +
+                            "${Money.format(shown.assigned)}" +
+                            (if (card.paid != 0L) " ${if (card.paid > 0) "−" else "+"} ${Money.format(kotlin.math.abs(card.paid))} paid" else "") +
+                            " = ${Money.format(current.available)} set aside; you owe ${Money.format(card.owed)}, so you're " +
+                            (if (card.coverage < 0) "${Money.format(-card.coverage)} short." else "covered with ${Money.format(card.coverage)} to spare."),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
                     )
                     Text(
                         "You owe ${Money.format(card.owed)} on this card" +
@@ -701,7 +711,7 @@ internal fun AssignDialog(
                         color = if (current.creditOverspent > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                     )
                 }
-                MoneyField("Assigned", text, { text = it }, Modifier.fillMaxWidth(), isError = parsed == null || tooMuch, result = parsed)
+                MoneyField(if (card != null) "Assigned here" else "Assigned", text, { text = it }, Modifier.fillMaxWidth(), isError = parsed == null || tooMuch, result = parsed)
                 Text(
                     "You can type a calculation, like ${Money.toInput(current.assigned)} + 5 — or just +5 to add to what's assigned.",
                     style = MaterialTheme.typography.bodySmall,
@@ -737,10 +747,10 @@ internal fun AssignDialog(
                             label = { Text("Goal: ${Money.format(goal.assignThisMonth)} this month") },
                         )
                     }
-                    if (card != null && card.underfunded > 0) {
+                    if (card != null && card.coverage < 0) {
                         AssistChip(
-                            onClick = { text = Money.toInput(current.assigned + card.underfunded) },
-                            label = { Text("Fund whole balance (+${Money.format(card.underfunded)})") },
+                            onClick = { text = Money.toInput(current.assigned - card.coverage) },
+                            label = { Text("Fund whole balance (+${Money.format(-card.coverage)})") },
                         )
                     }
                     AssistChip(onClick = { text = Money.toInput(lastMonth.assigned) }, label = { Text("Assigned last month (${Money.format(lastMonth.assigned)})") })
@@ -765,6 +775,7 @@ internal fun AssignDialog(
 
 @Composable
 private fun CardGroupRow(totals: List<CategoryMonth>, wide: Boolean) {
+    // Card rows are shown as cardFigures: assigned + money in from spending, payments, and coverage.
     Row(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -776,9 +787,20 @@ private fun CardGroupRow(totals: List<CategoryMonth>, wide: Boolean) {
     }
 }
 
-/** "+$120.00 from spending · $450.00 paid" for this month, or null when there's neither. */
+/**
+ * How a card's row reads in the budget: Assigned is what you assigned plus the money card spending
+ * moved in from its categories; Activity is payments; Available is what's set aside minus what's
+ * owed (negative = short of paying the card off). The payment category's own math is unchanged.
+ */
+internal fun cardFigures(card: CardPayment, cm: CategoryMonth) = CategoryMonth(
+    assigned = cm.assigned + card.fromSpending,
+    activity = -card.paid,
+    available = card.coverage,
+)
+
+/** "+$120.00 from categories · $450.00 paid" for this month, or null when there's neither. */
 private fun cardActivityLine(card: CardPayment): String? = listOfNotNull(
-    card.fromSpending.takeIf { it != 0L }?.let { "${if (it > 0) "+" else "−"}${Money.format(kotlin.math.abs(it))} from spending" },
+    card.fromSpending.takeIf { it != 0L }?.let { "${if (it > 0) "+" else "−"}${Money.format(kotlin.math.abs(it))} from categories" },
     card.paid.takeIf { it != 0L }?.let { "${Money.format(kotlin.math.abs(it))} ${if (it > 0) "paid" else "moved out"}" },
 ).takeIf { it.isNotEmpty() }?.joinToString(" · ")
 
@@ -802,9 +824,10 @@ private fun CardPaymentRow(
             Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val status = when {
                 card.owed <= 0 -> "Paid off"
-                card.underfunded == 0L -> "Owe ${Money.format(card.owed)} · ${if (wide) "fully funded" else "covered"}"
+                card.underfunded == 0L -> "Owe ${Money.format(card.owed)} · ${Money.format(maxOf(0, cm.available))} set aside · covered"
                 else -> listOfNotNull(
                     "Owe ${Money.format(card.owed)}",
+                    "${Money.format(maxOf(0, cm.available))} set aside".takeIf { wide },
                     if (card.overspentDebt == 0L) "spending covered" else "${Money.format(card.overspentDebt)} overspent",
                     card.startingDebtLeft.takeIf { it > 0 }?.let { "${Money.format(it)} ${if (wide) "of starting debt to set aside" else "starting debt"}" },
                 ).joinToString(" · ")
@@ -813,22 +836,24 @@ private fun CardPaymentRow(
                 status,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (card.underfunded > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = if (wide) 1 else 3,
+                maxLines = if (wide) 2 else 3,
                 overflow = TextOverflow.Ellipsis,
             )
             cardActivityLine(card)?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
+        val shown = cardFigures(card, cm)
         Text(
-            Money.format(cm.assigned),
+            Money.format(shown.assigned),
             Modifier.width(if (wide) 120.dp else 90.dp),
             textAlign = TextAlign.End,
-            color = if (cm.assigned == 0L) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+            color = if (shown.assigned == 0L) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
         )
-        if (wide) Text(Money.format(cm.activity), Modifier.width(120.dp), textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (wide) Text(Money.format(shown.activity), Modifier.width(120.dp), textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Box(Modifier.width(if (wide) 130.dp else 105.dp), contentAlignment = Alignment.CenterEnd) {
-            AvailablePill(cm.available, Modifier.clickable(onClick = onAvailable))
+            // Short of the balance shows amber (card debt); red only when payments went past what was set aside.
+            AvailablePill(shown.available, Modifier.clickable(onClick = onAvailable), creditOverspending = cm.available >= 0)
         }
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Card options") }
