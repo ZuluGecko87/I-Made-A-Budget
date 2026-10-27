@@ -53,6 +53,7 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
   - transactions you entered by hand, scheduled ones, and the other side of a transfer are **matched** within ±4 days instead of being added twice;
   - an upcoming scheduled transaction the bank already posted is matched and the schedule moves on;
   - new transactions come in **uncategorized** unless an auto-categorize rule matches (tick *Always use this for payees containing …* on a row, or manage rules in Settings);
+  - **Add transaction** on a row adds that one straight away (with the category picked on the row) and takes it off the list; **Import** adds the rest;
   - the bank account is remembered, so the next file from it goes to the right account.
 - **Sync** through OneDrive, Google Drive or Dropbox.
 

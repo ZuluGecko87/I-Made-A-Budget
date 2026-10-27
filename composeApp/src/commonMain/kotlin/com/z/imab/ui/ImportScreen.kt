@@ -21,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -121,6 +122,17 @@ private class StatementState(val stmt: OfxStatement) {
                 )
             }
         }
+    }
+
+    /** Transactions already added one at a time with *Add transaction*. */
+    var addedNow by mutableStateOf(0)
+
+    /** Adds one row to the account straight away and takes it off the list. */
+    fun addNow(index: Int, budget: Budget) {
+        val id = accountId ?: return
+        budget.applyImport(id, stmt.accountKey, listOf(rows[index].copy(action = ImportAction.ADD)))
+        rows.removeAt(index)
+        addedNow++
     }
 
     fun setDuplicates(action: ImportAction) {
@@ -231,8 +243,8 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
             val visible = st.rows.withIndex().filter { (_, r) ->
                 st.showDuplicates || r.kind != MatchKind.DUPLICATE || r.action != ImportAction.SKIP
             }
-            itemsIndexed(visible, key = { _, iv -> "row-${st.stmt.accountKey}-${iv.index}" }) { _, (index, row) ->
-                ImportRowView(row, data, st.accountId) { st.updateRow(index, it) }
+            itemsIndexed(visible, key = { _, iv -> "row-${st.stmt.accountKey}-${iv.value.importId}" }) { _, (index, row) ->
+                ImportRowView(row, data, st.accountId, onAdd = { st.addNow(index, store.budget) }) { st.updateRow(index, it) }
             }
         }
 
@@ -240,12 +252,13 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
             item {
                 val ready = statements.all { it.accountId != null }
                 val count = statements.sumOf { s -> s.rows.count { it.action != ImportAction.SKIP } }
+                val addedNow = statements.sumOf { it.addedNow }
                 Column(Modifier.padding(16.dp)) {
                     if (!ready) Text("Choose an account for each statement.", color = MaterialTheme.colorScheme.error)
                     Button(
-                        enabled = ready && count > 0,
+                        enabled = ready && (count > 0 || addedNow > 0),
                         onClick = {
-                            var added = 0; var matched = 0; var skipped = 0
+                            var added = addedNow; var matched = 0; var skipped = 0
                             for (s in statements) {
                                 val r = store.budget.applyImport(s.accountId!!, s.stmt.accountKey, s.rows.toList())
                                 added += r.added; matched += r.matched; skipped += r.skipped
@@ -255,7 +268,22 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
                             statements.clear()
                             fileName = null
                         },
-                    ) { Text(if (ready && count == 0) "Nothing new to import" else "Import $count transaction(s)") }
+                    ) {
+                        Text(
+                            when {
+                                ready && count == 0 && addedNow > 0 -> "Done"
+                                ready && count == 0 -> "Nothing new to import"
+                                else -> "Import $count transaction(s)"
+                            }
+                        )
+                    }
+                    if (addedNow > 0) {
+                        Text(
+                            "$addedNow transaction(s) already added.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
@@ -420,7 +448,7 @@ private fun KindBadge(kind: MatchKind, text: String) {
 }
 
 @Composable
-private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, onChange: (ImportRow) -> Unit) {
+private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, onAdd: () -> Unit, onChange: (ImportRow) -> Unit) {
     val skip = row.action == ImportAction.SKIP
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).alpha(if (skip) 0.55f else 1f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -436,16 +464,22 @@ private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, 
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            val actions = buildList {
-                if (row.kind == MatchKind.MATCH_EXISTING) add(ImportAction.MATCH to "Merge with what you entered")
-                if (row.kind == MatchKind.MATCH_SCHEDULED) add(ImportAction.MATCH to "Match scheduled")
-                add(ImportAction.ADD to "Add as new")
-                add(ImportAction.SKIP to "Skip")
+            // Adds this one now, with the category chosen here; the rest wait for the Import button.
+            FilledTonalButton(onClick = onAdd, enabled = accountId != null) { Text("Add transaction") }
+            val match = when (row.kind) {
+                MatchKind.MATCH_EXISTING -> "Merge with what you entered"
+                MatchKind.MATCH_SCHEDULED -> "Match scheduled"
+                else -> null
             }
-            actions.forEach { (action, label) ->
-                FilterChip(row.action == action, { onChange(row.copy(action = action)) }, label = { Text(label) })
+            // What Import does with it: a match is merged unless unticked; Skip leaves it out.
+            val usual = if (match != null) ImportAction.MATCH else ImportAction.ADD
+            match?.let {
+                FilterChip(row.action == ImportAction.MATCH, {
+                    onChange(row.copy(action = if (row.action == ImportAction.MATCH) ImportAction.ADD else ImportAction.MATCH))
+                }, label = { Text(it) })
             }
-            if (row.action == ImportAction.ADD) {
+            FilterChip(skip, { onChange(row.copy(action = if (skip) usual else ImportAction.SKIP)) }, label = { Text("Skip") })
+            if (row.action != ImportAction.MATCH) {
                 Picker(
                     "Category",
                     categoryOptions(data, accountId),
