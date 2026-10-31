@@ -21,7 +21,7 @@ import com.z.imab.model.READY_TO_ASSIGN
 import com.z.imab.model.ScheduledTransaction
 import com.z.imab.model.Transaction
 import com.z.imab.model.YearMonth
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.KSerializer
 import kotlin.uuid.Uuid
@@ -536,7 +536,7 @@ class Budget(
     }
 
     private fun today(): LocalDate =
-        kotlinx.datetime.Instant.fromEpochMilliseconds(clock()).toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+        kotlin.time.Instant.fromEpochMilliseconds(clock()).toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
 
     // ---------------------------------------------------------------- scheduled
 

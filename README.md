@@ -239,6 +239,19 @@ the installed app, and people would have to uninstall it (their budget comes bac
 
 The Mac and Windows installers aren't signed, which is why they show a warning the first time.
 
+## Security
+
+- IMAB uses no network itself: the budget is a file your cloud app syncs. It asks for no Android
+  permissions, and on Android the budget is kept out of cloud backup.
+- Check every dependency (the app's and the build tools') against the OSV vulnerability database:
+
+  ```sh
+  ./gradlew -q buildEnvironment :composeApp:dependencies | python3 scripts/osv-check.py
+  ```
+
+  The release workflow runs the same check and won't build installers if anything is found. Known
+  fixes for the build tools' own libraries are pinned in the root `build.gradle.kts`.
+
 The splash screen artwork and the app icons are drawn in code (`ui/Splash.kt`). After changing it,
 regenerate the icon files with `./gradlew :composeApp:desktopTest -Picons`, then rebuild
 `composeApp/icons/IMAB.icns` from `IMAB-1024.png` (sips + iconutil).

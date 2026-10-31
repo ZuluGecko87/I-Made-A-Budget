@@ -30,7 +30,7 @@ import com.z.imab.data.BudgetStore
 import com.z.imab.data.SyncStatus
 import com.z.imab.platform.Pickers
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 

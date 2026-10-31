@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import kotlinx.datetime.toLocalDateTime
@@ -329,7 +329,7 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
 
     /** "<base> archive 2026-10-19 1834.json" in local time. */
     private fun archiveName(base: String, atMillis: Long): String {
-        val t = kotlinx.datetime.Instant.fromEpochMilliseconds(atMillis).toLocalDateTime(TimeZone.currentSystemDefault())
+        val t = kotlin.time.Instant.fromEpochMilliseconds(atMillis).toLocalDateTime(TimeZone.currentSystemDefault())
         fun two(n: Int) = n.toString().padStart(2, '0')
         return "$base archive ${t.year}-${two(t.monthNumber)}-${two(t.dayOfMonth)} ${two(t.hour)}${two(t.minute)}.json"
     }

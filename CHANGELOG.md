@@ -4,6 +4,22 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.5.1 — 2026-10-31
+
+Security update. Every library in the app and the build tools was checked against the OSV database
+(CVEs and GitHub advisories); none now has a known vulnerability.
+
+- Kotlin 2.1.0 → 2.4.21 (fixes CVE-2026-53914 in the Kotlin Gradle plugin), Compose Multiplatform
+  1.7.3 → 1.11.1, Android Gradle plugin 8.7.3 → 8.13.2, Gradle 8.11.1 → 8.14.6 (download checksum
+  pinned), kotlinx-datetime 0.6.1 → 0.7.1.
+- Build tools' libraries pinned to fixed releases: Bouncy Castle 1.86, Netty 4.1.139, protobuf
+  3.25.9, Guava 33.7.2, commons-io 2.22.0, commons-compress 1.28.0, jose4j 0.9.7, JDOM 2.0.6.1.
+- The Mac app bundles Java 17.0.21 (October 2026 security update).
+- Android: the budget is excluded from cloud backup and device transfer (it's restored from the
+  sync file instead).
+- Release workflow: dependency audit before building, actions pinned to commit SHAs, read-only
+  permissions except publishing, Gradle wrapper validation, and no caches in release builds.
+
 ## 1.5.0 — 2026-10-31
 
 - Windows version (an `.msi` installer). It keeps its data in `%APPDATA%\IMAB` and finds the OneDrive,

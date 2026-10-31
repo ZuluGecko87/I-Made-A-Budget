@@ -162,7 +162,7 @@ object ImportMatcher {
     private fun display(d: LocalDate) =
         "${d.monthNumber.toString().padStart(2, '0')}/${d.dayOfMonth.toString().padStart(2, '0')}/${(d.year % 100).toString().padStart(2, '0')}"
 
-    fun daysApart(a: LocalDate, b: LocalDate): Int = abs(a.toEpochDays() - b.toEpochDays())
+    fun daysApart(a: LocalDate, b: LocalDate): Int = abs(a.toEpochDays() - b.toEpochDays()).toInt()
 
     /** "AMAZON MKTPL*AB12C3 AMZN.COM/BILL WA" -> "amazon mktpl amzn com bill wa". */
     fun normalizePayee(s: String): String =

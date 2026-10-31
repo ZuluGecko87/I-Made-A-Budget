@@ -114,6 +114,11 @@ android {
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     }
+    lint {
+        // AGP 8's lint reads Kotlin metadata up to 2.2, so it can't analyze this Kotlin 2.4 code and
+        // only prints errors. Revisit when moving to AGP 9.
+        checkReleaseBuilds = false
+    }
     signingConfigs {
         releaseSigning?.let { s ->
             create("release") {

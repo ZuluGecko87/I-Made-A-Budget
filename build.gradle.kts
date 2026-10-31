@@ -25,6 +25,25 @@ buildscript {
     }
 }
 
+// The same fixes for tools the Android plugin resolves inside the app module (its on-device test
+// runner and similar), which the buildscript block above doesn't reach.
+subprojects {
+    configurations.configureEach {
+        resolutionStrategy.eachDependency {
+            val v = requested.version ?: return@eachDependency
+            when {
+                requested.group == "io.netty" && v.startsWith("4.1.") && v != "4.1.139.Final" ->
+                    useVersion("4.1.139.Final")
+                requested.group == "com.google.guava" && requested.name == "guava" && v.endsWith("-jre") ->
+                    useVersion("33.7.2-jre")
+                requested.group == "com.google.protobuf" && requested.name in setOf("protobuf-java", "protobuf-kotlin") && v.startsWith("3.") ->
+                    useVersion("3.25.9")
+            }
+            if (requested.version != target.version) because("fixes known vulnerabilities (OSV / GitHub advisories)")
+        }
+    }
+}
+
 plugins {
     alias(libs.plugins.androidApplication) apply false
     alias(libs.plugins.kotlinMultiplatform) apply false
