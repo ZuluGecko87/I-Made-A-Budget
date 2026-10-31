@@ -218,8 +218,9 @@ each release); it's shown at the bottom of Settings. Changes are listed in `CHAN
 
 ## Releases
 
-Pushing a version tag publishes a release: set `imab.versionName` (and raise `imab.versionCode`) in
-`gradle.properties`, add the version to `CHANGELOG.md`, commit, tag it `v<version>` and push the tag.
+To publish a release: set `imab.versionName` (and raise `imab.versionCode`) in `gradle.properties`,
+add the version to `CHANGELOG.md`, commit and push. Then on GitHub open **Actions → Release → Run
+workflow** (on `main`); it creates the `v<version>` tag. Pushing a `v<version>` tag also works.
 `.github/workflows/release.yml` checks the tag matches, builds the Android APK, both Mac DMGs and the
 Windows MSI on GitHub's machines, and publishes them with that version's changelog.
 

@@ -1,5 +1,7 @@
-# Builds the installers and publishes them as a GitHub release when a version tag (v1.2.3) is pushed.
-# The tag must match imab.versionName in gradle.properties.
+# Builds the installers and publishes them as a GitHub release, either:
+#   - from the Actions tab: Release → Run workflow (on main). It releases the version in
+#     gradle.properties (imab.versionName) and creates its v<version> tag; or
+#   - when a version tag (v1.2.3) is pushed. The tag must match imab.versionName.
 #
 # Android signing needs these repository secrets (Settings → Secrets and variables → Actions):
 #   IMAB_KEYSTORE_BASE64   the release key file, base64-encoded
@@ -15,6 +17,7 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,19 +27,31 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check the Gradle wrapper is the genuine one
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - id: v
-        name: Check the tag matches the app version
+        name: Work out the version and check it isn't released yet
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(grep '^imab.versionName=' gradle.properties | cut -d= -f2)
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "v$version" != "$GITHUB_REF_NAME" ]; then
             echo "::error::Tag $GITHUB_REF_NAME doesn't match imab.versionName=$version in gradle.properties"
             exit 1
           fi
+          if [ "$GITHUB_REF_TYPE" != "tag" ] && [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "::error::Run the release from the main branch."
+            exit 1
+          fi
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::v$version is already released. Raise imab.versionName in gradle.properties first."
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
   audit:
     # Every library in the app and the build tools must have no known vulnerabilities (OSV: CVEs
@@ -165,6 +180,8 @@ jobs:
           find artifacts -type f \( -name '*.apk' -o -name '*.dmg' -o -name '*.msi' \) -exec cp {} dist/ \;
           ls -la dist
           [ "$(ls dist | wc -l)" -eq 4 ] || { echo "::error::Expected 4 installers"; exit 1; }
-          gh release create "$GITHUB_REF_NAME" dist/* \
+          # Creates the tag on this commit when the release was started from the Actions tab.
+          gh release create "${{ needs.version.outputs.tag }}" dist/* \
+            --target "$GITHUB_SHA" \
             --title "IMAB ${{ needs.version.outputs.version }}" \
             --notes-file notes.md
