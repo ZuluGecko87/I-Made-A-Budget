@@ -33,6 +33,8 @@ data class Settings(
     val theme: String = "system",
     /** Full sync this often; new versions of the file are also picked up as soon as they arrive. */
     val syncIntervalMinutes: Int = 5,
+    /** Show the "budget isn't encrypted" reminder on every screen until a passphrase is set. */
+    val encryptionReminder: Boolean = true,
 )
 
 sealed interface SyncStatus {
@@ -282,6 +284,11 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
 
     private suspend fun saveSettings() =
         storage.writeLocal(SETTINGS_FILE, ImabJson.encodeToString(Settings.serializer(), _settings.value))
+
+    fun setEncryptionReminder(show: Boolean) {
+        _settings.value = _settings.value.copy(encryptionReminder = show)
+        scope.launch { saveSettings() }
+    }
 
     fun setTheme(theme: String) {
         _settings.value = _settings.value.copy(theme = theme)

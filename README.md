@@ -247,7 +247,8 @@ The Mac and Windows installers aren't signed, which is why they show a warning t
   the file); the file header is bound to the encryption so it can't be altered. Each device asks for
   the passphrase once and keeps the key in the Mac Keychain, the Android Keystore or Windows data
   protection (elsewhere it asks each time). **A forgotten passphrase can't be recovered** — keep it
-  in a password manager. A device without the key never overwrites an encrypted file.
+  in a password manager. A device without the key never overwrites an encrypted file. Until a passphrase is set, a reminder shows on every
+  screen; *Dismiss* turns it off, and the switch under Settings → Encryption turns it back on.
 - **Account numbers**: bank files contain full account and card numbers. IMAB keeps only the bank's
   id and the last 4 digits (e.g. `bank-123456789-••1234`, `card-••1234`) to recognize the account.
 - IMAB uses no network itself: the budget is a file your cloud app syncs. It asks for no Android

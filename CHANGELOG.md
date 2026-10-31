@@ -4,6 +4,11 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.6.1 — 2026-10-31
+
+- The reminder to encrypt is optional: **Dismiss** turns it off for good, and Settings → Encryption
+  has a switch to bring it back.
+
 ## 1.6.0 — 2026-10-31
 
 - **Encryption.** Settings → Encryption sets a passphrase that encrypts the budget files: the sync

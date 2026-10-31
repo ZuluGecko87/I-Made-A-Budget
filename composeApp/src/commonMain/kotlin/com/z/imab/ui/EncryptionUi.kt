@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -152,18 +153,19 @@ fun UnlockScreen(store: BudgetStore) {
 fun EncryptionBanner(store: BudgetStore, onSetUp: () -> Unit) {
     val lock by store.lock.collectAsState()
     val encrypted by store.encrypted.collectAsState()
+    val settings by store.settings.collectAsState()
     var asking by remember { mutableStateOf(false) }
-    var dismissed by remember { mutableStateOf(false) }
     val syncLocked = (lock as? LockState.NeedsPassphrase)?.local == false
     when {
         syncLocked -> BannerCard(
             "Your synced budget is encrypted with a passphrase this device doesn't have yet. Enter it to keep syncing.",
             "Enter passphrase",
         ) { asking = true }
-        !encrypted && !dismissed -> BannerCard(
-            "Your budget file isn't encrypted. Set a passphrase so it can't be read by anyone with access to your cloud storage.",
+        !encrypted && settings.encryptionReminder -> BannerCard(
+            "Your budget file isn't encrypted. Set a passphrase so it can't be read by anyone with access to your " +
+                "cloud storage. Dismiss to stop this reminder (Settings → Encryption brings it back).",
             "Set passphrase",
-            onDismiss = { dismissed = true },
+            onDismiss = { store.setEncryptionReminder(false) },
         ) { onSetUp() }
     }
     if (asking) {
@@ -189,7 +191,7 @@ private fun BannerCard(text: String, action: String, onDismiss: (() -> Unit)? = 
                 Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                onDismiss?.let { TextButton(onClick = it) { Text("Not now") } }
+                onDismiss?.let { TextButton(onClick = it) { Text("Dismiss") } }
                 Button(onClick = onAction) { Text(action) }
             }
         }
@@ -228,6 +230,11 @@ fun EncryptionCard(store: BudgetStore, openSetUp: Boolean = false, onSetUpShown:
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Button(onClick = { setting = true }) { Text("Set a passphrase…") }
+                val settings by store.settings.collectAsState()
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Switch(settings.encryptionReminder, { store.setEncryptionReminder(it) })
+                    Text("Remind me on every screen until it's encrypted", style = MaterialTheme.typography.bodyMedium)
+                }
             }
             done?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
         }

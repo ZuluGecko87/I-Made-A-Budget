@@ -48,6 +48,7 @@ class ImportAddNowTest {
     fun addTransactionAddsItNowAndTakesItOffTheList() = runComposeUiTest {
         val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
         runBlocking { store.start() }
+        store.setEncryptionReminder(false) // the banner isn't what this tests, and it takes room on screen
         store.budget.saveAccount(Account("chk", "Everyday Checking"), 0, LocalDate(2026, 9, 1))
         val nav = NavState().apply { openAccount("chk") }
         setContent { App(store, NoPickers, nav, showSplash = false) }
@@ -69,6 +70,7 @@ class ImportAddNowTest {
     fun mergeKeepsOneClearedTransactionLabelledMerged() = runComposeUiTest {
         val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
         runBlocking { store.start() }
+        store.setEncryptionReminder(false) // the banner isn't what this tests, and it takes room on screen
         val b = store.budget
         b.saveAccount(Account("chk", "Everyday Checking"), 0, LocalDate(2026, 9, 1))
         // Entered by hand a day after the bank's Kroger charge on 10/01.
