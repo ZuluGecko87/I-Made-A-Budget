@@ -5,7 +5,7 @@ codebase (Kotlin Multiplatform + Compose Multiplatform).
 
 ## Install
 
-Download the latest version from the [Releases page](https://github.com/ZuluGecko87/IMAB/releases/latest):
+Download the latest version from the [Releases page](https://github.com/ZuluGecko87/I-Made-A-Budget/releases/latest):
 
 | Device | File | Notes |
 |---|---|---|
