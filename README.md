@@ -241,6 +241,15 @@ The Mac and Windows installers aren't signed, which is why they show a warning t
 
 ## Security
 
+- **Encryption**: Settings → Encryption → *Set a passphrase*. Every budget file is then encrypted
+  with AES-256-GCM: the sync file, each device's own copy, archives, and conflict copies next to the
+  sync file. The key comes from the passphrase (PBKDF2-HMAC-SHA256, 600,000 rounds, random salt in
+  the file); the file header is bound to the encryption so it can't be altered. Each device asks for
+  the passphrase once and keeps the key in the Mac Keychain, the Android Keystore or Windows data
+  protection (elsewhere it asks each time). **A forgotten passphrase can't be recovered** — keep it
+  in a password manager. A device without the key never overwrites an encrypted file.
+- **Account numbers**: bank files contain full account and card numbers. IMAB keeps only the bank's
+  id and the last 4 digits (e.g. `bank-123456789-••1234`, `card-••1234`) to recognize the account.
 - IMAB uses no network itself: the budget is a file your cloud app syncs. It asks for no Android
   permissions, and on Android the budget is kept out of cloud backup.
 - Check every dependency (the app's and the build tools') against the OSV vulnerability database:

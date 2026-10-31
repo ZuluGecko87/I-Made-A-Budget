@@ -13,7 +13,7 @@ class OfxParserTest {
         val statements = OfxParser.parse(Samples.QBO_CHECKING)
         assertEquals(1, statements.size)
         val s = statements[0]
-        assertEquals("123456789-000111222", s.accountKey)
+        assertEquals("bank-123456789-••1222", s.accountKey, "only the bank id and last 4 digits")
         assertEquals(false, s.isCreditCard)
         assertEquals(152034L, s.ledgerBalance)
         assertEquals(3, s.transactions.size)
@@ -33,7 +33,7 @@ class OfxParserTest {
     fun parsesXmlCreditCard() {
         val s = OfxParser.parse(Samples.OFX_XML_CREDIT_CARD).single()
         assertTrue(s.isCreditCard)
-        assertEquals("4111XXXX1111", s.accountKey)
+        assertEquals("card-••1111", s.accountKey)
         assertEquals(2, s.transactions.size)
         assertEquals(-1999L, s.transactions[0].amount)
         assertEquals("NETFLIX.COM", s.transactions[0].name)

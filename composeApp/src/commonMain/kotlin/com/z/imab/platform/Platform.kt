@@ -36,8 +36,25 @@ interface Storage {
      */
     suspend fun writeArchive(location: SyncLocation, name: String, text: String): Boolean = false
 
+    /**
+     * Rewrites each conflict copy next to the sync file with [transform]'s result (skipping those it
+     * returns null for). Used to encrypt copies whose contents have already been merged.
+     */
+    suspend fun rewriteConflictCopies(location: SyncLocation, transform: (String) -> String?) {}
+
     /** Names of files in app storage starting with [prefix], newest first. */
     suspend fun listLocal(prefix: String): List<String> = emptyList()
+
+    /**
+     * The budget's encryption key, kept in the system's secure storage (Mac Keychain, Android
+     * Keystore, Windows data protection) so the passphrase is only typed once per device.
+     * [saveKey] returns false where there's no secure storage; then the passphrase is asked each time.
+     */
+    suspend fun loadKey(): String? = null
+
+    suspend fun saveKey(value: String): Boolean = false
+
+    suspend fun deleteKey() {}
 }
 
 /** System file pickers; implemented per platform. */

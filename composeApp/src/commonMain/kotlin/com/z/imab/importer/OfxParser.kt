@@ -14,7 +14,10 @@ data class OfxTransaction(
 )
 
 data class OfxStatement(
-    /** Stable identifier for the bank account, used to remember which IMAB account it maps to. */
+    /**
+     * Identifies the bank account so the next file from it goes to the same IMAB account. Only the
+     * bank's id and the last 4 digits ([AccountKeys]); the full account or card number is never stored.
+     */
     val accountKey: String,
     val bankId: String?,
     val accountId: String,
@@ -27,6 +30,27 @@ data class OfxStatement(
 ) {
     /** Masked number for display, e.g. "••1234". */
     val shortName: String get() = "••" + accountId.takeLast(4)
+}
+
+/**
+ * Account keys hold no full account or card numbers: "bank-<routing/bank id>-••1234" for a bank
+ * account, "card-••1234" for a card. Keys saved by older versions ("<bank id>-<full number>" or the
+ * full card number) are converted with [mask].
+ */
+object AccountKeys {
+    fun of(bankId: String?, accountId: String): String {
+        val last4 = accountId.filter { it.isLetterOrDigit() }.takeLast(4)
+        return if (bankId.isNullOrBlank()) "card-••$last4" else "bank-${bankId.trim()}-••$last4"
+    }
+
+    fun isMasked(key: String) = key.startsWith("bank-") || key.startsWith("card-")
+
+    /** The masked form of a key saved by an older version. */
+    fun mask(key: String): String {
+        if (isMasked(key)) return key
+        val dash = key.indexOf('-')
+        return if (dash > 0) of(key.substring(0, dash), key.substring(dash + 1)) else of(null, key)
+    }
 }
 
 /**
@@ -105,7 +129,7 @@ object OfxParser {
             val acctId = account["ACCTID"] ?: "unknown"
             val bankId = account["BANKID"]
             return OfxStatement(
-                accountKey = if (bankId != null) "$bankId-$acctId" else acctId,
+                accountKey = AccountKeys.of(bankId, acctId),
                 bankId = bankId,
                 accountId = acctId,
                 accountType = account["ACCTTYPE"],

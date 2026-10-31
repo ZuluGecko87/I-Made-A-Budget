@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.z.imab.data.Budget
 import com.z.imab.data.BudgetStore
+import com.z.imab.importer.AccountKeys
 import com.z.imab.importer.ImportAction
 import com.z.imab.importer.ImportMatcher
 import com.z.imab.importer.ImportRow
@@ -165,7 +166,9 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
             statements.clear()
             parsed.forEach { stmt ->
                 val st = StatementState(stmt)
-                val known = data.accounts.values.firstOrNull { stmt.accountKey in it.importKeys }?.id
+                // Only when exactly one account has this bank id and last 4 digits; otherwise ask.
+                val key = AccountKeys.mask(stmt.accountKey)
+                val known = data.accounts.values.filter { a -> a.importKeys.any { AccountKeys.mask(it) == key } }.singleOrNull()?.id
                     ?: nav.importAccountId?.takeIf { parsed.size == 1 && data.accounts.containsKey(it) }
                 st.chooseAccount(known, data)
                 statements += st
@@ -312,7 +315,7 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
             suggestedBalance = ImportWindow.openingBalance(stmt, st.from) ?: 0,
             suggestedDate = st.from.minus(1, DateTimeUnit.DAY),
             onSave = { a, bal, date ->
-                store.budget.saveAccount(a.copy(importKeys = listOf(stmt.accountKey)), bal, date)
+                store.budget.saveAccount(a.copy(importKeys = listOf(AccountKeys.mask(stmt.accountKey))), bal, date)
                 st.createdAccountId = a.id
                 st.chooseAccount(a.id, store.budget.data)
                 creatingFor = null

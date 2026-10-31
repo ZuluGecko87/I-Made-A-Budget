@@ -46,6 +46,10 @@ kotlin {
     sourceSets {
         val desktopMain by getting
         val desktopTest by getting
+        // Code shared by Android and desktop, which both run on the JVM (javax.crypto).
+        val jvmSharedMain by creating { dependsOn(commonMain.get()) }
+        androidMain.get().dependsOn(jvmSharedMain)
+        desktopMain.dependsOn(jvmSharedMain)
 
         commonMain.configure { kotlin.srcDir(generateBuildInfo) }
         commonMain.dependencies {

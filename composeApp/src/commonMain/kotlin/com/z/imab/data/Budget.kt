@@ -1,6 +1,7 @@
 package com.z.imab.data
 
 import com.z.imab.budget.Scheduler
+import com.z.imab.importer.AccountKeys
 import com.z.imab.importer.ImportAction
 import com.z.imab.importer.ImportMatcher
 import com.z.imab.importer.ImportRow
@@ -61,6 +62,21 @@ class Budget(
         ledger.reset(file.budgetId, file.startedAt)
         file.ops.forEach { ledger.merge(it) }
         rebuild()
+    }
+
+    /**
+     * Replaces full account or card numbers that older versions saved in an account's import keys
+     * with the masked form (bank id and last 4 digits). Returns how many accounts changed.
+     */
+    fun maskAccountNumbers(): Int {
+        val todo = data.accounts.values.filter { a -> a.importKeys.any { !AccountKeys.isMasked(it) } }
+        if (todo.isEmpty()) return 0
+        edit {
+            todo.forEach { a ->
+                put(Kinds.ACCOUNT, a.id, a.copy(importKeys = a.importKeys.map(AccountKeys::mask).distinct()), Account.serializer())
+            }
+        }
+        return todo.size
     }
 
     // ---------------------------------------------------------------- starting over
@@ -575,8 +591,8 @@ class Budget(
         var matched = 0
         var skipped = 0
         d.accounts[accountId]?.let { acct ->
-            if (accountKey != null && accountKey !in acct.importKeys) {
-                put(Kinds.ACCOUNT, acct.id, acct.copy(importKeys = acct.importKeys + accountKey), Account.serializer())
+            if (accountKey != null && AccountKeys.mask(accountKey) !in acct.importKeys) {
+                put(Kinds.ACCOUNT, acct.id, acct.copy(importKeys = acct.importKeys + AccountKeys.mask(accountKey)), Account.serializer())
             }
         }
         // Oldest first, so loan payments split against the right balance.

@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.z.imab.data.LockState
 import com.z.imab.data.BudgetStore
 import com.z.imab.data.SyncStatus
 import com.z.imab.platform.Pickers
@@ -82,6 +83,9 @@ class NavState {
 
     /** Shown briefly when something other than a bank file is dropped. */
     var dropError by mutableStateOf<String?>(null)
+
+    /** Settings should open the passphrase dialog (from the "Set passphrase" banner). */
+    var setUpEncryption by mutableStateOf(false)
 
     fun go(s: Screen) {
         screen = s
@@ -147,8 +151,13 @@ fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean
             }
             Box(modifier.fillMaxSize()) {
                 if (loaded) {
-                    CompositionLocalProvider(LocalCreateCategory provides { name, groupId -> store.budget.addCategory(groupId, name) }) {
-                        MainLayout(store, pickers, nav)
+                    val lock by store.lock.collectAsState()
+                    if ((lock as? LockState.NeedsPassphrase)?.local == true) {
+                        UnlockScreen(store)
+                    } else {
+                        CompositionLocalProvider(LocalCreateCategory provides { name, groupId -> store.budget.addCategory(groupId, name) }) {
+                            MainLayout(store, pickers, nav)
+                        }
                     }
                     if (nav.dragging) DropOverlay(store, nav)
                     nav.dropError?.let { message ->
@@ -248,6 +257,14 @@ private fun RailHeader(store: BudgetStore) {
 
 @Composable
 private fun Content(store: BudgetStore, pickers: Pickers, nav: NavState, wide: Boolean) {
+    Column(Modifier.fillMaxSize()) {
+        EncryptionBanner(store, onSetUp = { nav.go(Screen.Settings); nav.setUpEncryption = true })
+        Box(Modifier.weight(1f)) { Screens(store, pickers, nav, wide) }
+    }
+}
+
+@Composable
+private fun Screens(store: BudgetStore, pickers: Pickers, nav: NavState, wide: Boolean) {
     when (nav.screen) {
         Screen.Budget -> BudgetScreen(store, nav, wide)
         Screen.Accounts -> {
@@ -258,6 +275,6 @@ private fun Content(store: BudgetStore, pickers: Pickers, nav: NavState, wide: B
         Screen.Reports -> ReportsScreen(store)
         Screen.Scheduled -> ScheduledScreen(store, wide)
         Screen.Import -> ImportScreen(store, pickers, nav)
-        Screen.Settings -> SettingsScreen(store, pickers)
+        Screen.Settings -> SettingsScreen(store, pickers, nav)
     }
 }

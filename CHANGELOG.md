@@ -4,6 +4,18 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.6.0 — 2026-10-31
+
+- **Encryption.** Settings → Encryption sets a passphrase that encrypts the budget files: the sync
+  file, each device's own copy, archives, and conflict copies the cloud service left next to the
+  sync file (AES-256-GCM; key from the passphrase with PBKDF2-HMAC-SHA256, 600,000 rounds). Each
+  device asks for the passphrase once and keeps the key in the Mac Keychain, the Android Keystore or
+  Windows data protection. Changing it on one device makes the others ask for the new one. A device
+  that can't read the file never overwrites it. A banner suggests setting one until you do.
+- **No full account numbers.** Bank files carry the full account or card number; IMAB now keeps
+  only the bank's id and the last 4 digits to recognize the account. Numbers saved by earlier
+  versions are replaced when the app opens.
+
 ## 1.5.1 — 2026-10-31
 
 Security update. Every library in the app and the build tools was checked against the OSV database

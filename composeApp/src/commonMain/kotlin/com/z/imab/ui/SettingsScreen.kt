@@ -35,7 +35,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 @Composable
-fun SettingsScreen(store: BudgetStore, pickers: Pickers) {
+fun SettingsScreen(store: BudgetStore, pickers: Pickers, nav: NavState? = null) {
     val settings by store.settings.collectAsState()
     val sync by store.syncStatus.collectAsState()
     val data by store.data.collectAsState()
@@ -114,6 +114,8 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers) {
             }
         }
 
+        EncryptionCard(store, openSetUp = nav?.setUpEncryption == true, onSetUpShown = { nav?.setUpEncryption = false })
+
         PayeesCard(data, store.budget)
 
         RulesCard(data, store.budget)
@@ -174,6 +176,7 @@ private fun syncText(s: SyncStatus): String = when (s) {
         (if (s.pulled > 0) " · received ${s.pulled} change(s)" else "") +
         (if (s.pushed) " · uploaded changes" else " · up to date")
     is SyncStatus.Failed -> "Sync failed at ${time(s.atMillis)}: ${s.message}"
+    SyncStatus.Locked -> "Waiting for the passphrase: the synced budget is encrypted and this device doesn't have the key yet."
 }
 
 private fun time(ms: Long): String {

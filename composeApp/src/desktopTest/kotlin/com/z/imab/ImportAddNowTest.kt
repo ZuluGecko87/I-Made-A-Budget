@@ -54,13 +54,14 @@ class ImportAddNowTest {
         nav.importFile(PickedFile("Checking_Oct.qbo", Samples.QBO_CHECKING))
         waitForIdle()
 
-        val rows = onAllNodesWithText("Add transaction").fetchSemanticsNodes().size
+        // The first row is the Kroger charge.
+        onNodeWithText("KROGER #123").assertExists()
         val before = store.budget.data.transactionsByAccount["chk"].orEmpty().size
         onAllNodesWithText("Add transaction")[0].performClick()
         waitForIdle()
 
         assertEquals(before + 1, store.budget.data.transactionsByAccount["chk"].orEmpty().size)
-        assertEquals(rows - 1, onAllNodesWithText("Add transaction").fetchSemanticsNodes().size)
+        onNodeWithText("KROGER #123").assertDoesNotExist()
         onNodeWithText("1 added already.").assertExists()
     }
 

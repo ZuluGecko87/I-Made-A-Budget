@@ -29,6 +29,7 @@ import com.z.imab.data.Budget
 import com.z.imab.data.BudgetStore
 import com.z.imab.data.Ledger
 import com.z.imab.data.LedgerFile
+import com.z.imab.data.VaultLockedException
 import com.z.imab.platform.Pickers
 import kotlinx.coroutines.launch
 
@@ -37,8 +38,7 @@ private enum class Reset { FRESH, SCRATCH }
 /** An archive picked to restore, with a summary to confirm against. */
 private class Restorable(val name: String, val file: LedgerFile, val accounts: Int, val transactions: Int, val categories: Int)
 
-private fun restorable(name: String, text: String): Restorable {
-    val file = Ledger.decodeFile(text)
+private fun restorable(name: String, file: LedgerFile): Restorable {
     val preview = Budget("preview").also { it.adopt(file) }.data
     return Restorable(name, file, preview.accounts.size, preview.transactions.size, preview.categories.size)
 }
@@ -80,12 +80,40 @@ fun StartOverCard(store: BudgetStore, pickers: Pickers) {
         }
     }
 
+    /** An encrypted archive whose passphrase is needed (it was encrypted with an older one). */
+    var needsPassphrase by remember { mutableStateOf<Pair<String, String>?>(null) }
+
     fun pickRestore(name: String?, text: String?) {
         if (text == null) return
         message = null
-        restoring = runCatching { restorable(name ?: "archive", text) }.getOrElse {
-            message = "That isn't an IMAB budget file."
-            null
+        scope.launch {
+            restoring = try {
+                restorable(name ?: "archive", store.decodeArchive(text))
+            } catch (e: VaultLockedException) {
+                needsPassphrase = (name ?: "archive") to text
+                null
+            } catch (e: Exception) {
+                message = "That isn't an IMAB budget file."
+                null
+            }
+        }
+    }
+
+    needsPassphrase?.let { (name, text) ->
+        PassphraseDialog(
+            title = "Archive is encrypted",
+            explanation = "\"$name\" was encrypted with a different passphrase. Enter the passphrase it was saved with.",
+            confirm = false,
+            action = "Open",
+            onDismiss = { needsPassphrase = null },
+        ) { p ->
+            try {
+                restoring = restorable(name, store.decodeArchive(text, p))
+                needsPassphrase = null
+                null
+            } catch (e: VaultLockedException) {
+                "That passphrase doesn't open this archive."
+            }
         }
     }
 

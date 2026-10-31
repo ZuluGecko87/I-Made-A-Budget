@@ -79,6 +79,14 @@ class DesktopStorage : Storage {
 
     override val defaultDeviceName: String by lazy { computerName() ?: if (isMac) "Mac" else "Computer" }
 
+    private val keyVault by lazy { DesktopKeyVault(dir) }
+
+    override suspend fun loadKey(): String? = withContext(Dispatchers.IO) { keyVault.load() }
+
+    override suspend fun saveKey(value: String): Boolean = withContext(Dispatchers.IO) { keyVault.save(value) }
+
+    override suspend fun deleteKey() = withContext(Dispatchers.IO) { keyVault.delete() }
+
     override suspend fun readLocal(name: String): String? = withContext(Dispatchers.IO) {
         File(dir, name).takeIf { it.isFile }?.readText()
     }
@@ -101,6 +109,13 @@ class DesktopStorage : Storage {
         if (!folder.isDirectory) return@withContext false
         atomicWrite(File(folder, name), text)
         true
+    }
+
+    override suspend fun rewriteConflictCopies(location: SyncLocation, transform: (String) -> String?) = withContext(Dispatchers.IO) {
+        for (copy in conflictCopies(File(location.id))) {
+            val text = runCatching { copy.readText() }.getOrNull() ?: continue
+            transform(text)?.let { atomicWrite(copy, it) }
+        }
     }
 
     override suspend fun listLocal(prefix: String): List<String> = withContext(Dispatchers.IO) {

@@ -24,6 +24,14 @@ private const val RW = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRAN
 class AndroidStorage(private val context: Context) : Storage {
     override val defaultDeviceName: String = "${Build.MANUFACTURER} ${Build.MODEL}"
 
+    private val keyVault = AndroidKeyVault(File(context.noBackupFilesDir, "budget-key.bin"))
+
+    override suspend fun loadKey(): String? = withContext(Dispatchers.IO) { keyVault.load() }
+
+    override suspend fun saveKey(value: String): Boolean = withContext(Dispatchers.IO) { keyVault.save(value) }
+
+    override suspend fun deleteKey() = withContext(Dispatchers.IO) { keyVault.delete() }
+
     override suspend fun readLocal(name: String): String? = withContext(Dispatchers.IO) {
         File(context.filesDir, name).takeIf { it.isFile }?.readText()
     }
