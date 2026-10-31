@@ -48,6 +48,20 @@ internal fun cloudFolders(): List<File> {
 }
 
 /**
+ * This computer's name, read locally. (Looking it up over the network, as InetAddress.getLocalHost
+ * does, makes macOS ask for permission to find devices on the local network, which IMAB never needs.)
+ */
+internal fun computerName(): String? = runCatching {
+    when {
+        isMac -> ProcessBuilder("/usr/sbin/scutil", "--get", "ComputerName").redirectErrorStream(true).start().let { p ->
+            p.inputStream.bufferedReader().readText().trim().takeIf { p.waitFor() == 0 }
+        }
+        isWindows -> System.getenv("COMPUTERNAME")
+        else -> System.getenv("HOSTNAME") ?: File("/etc/hostname").takeIf { it.isFile }?.readText()?.trim()
+    }
+}.getOrNull()?.takeIf { it.isNotBlank() }
+
+/**
  * Windows ignores FileDialog's filename filter; a pattern in the file name box filters instead.
  * Returns the name to start the dialog with.
  */
@@ -63,8 +77,7 @@ class DesktopStorage : Storage {
         appDataDir().apply { mkdirs() }
     }
 
-    override val defaultDeviceName: String =
-        runCatching { java.net.InetAddress.getLocalHost().hostName.removeSuffix(".local") }.getOrNull() ?: if (isMac) "Mac" else "Computer"
+    override val defaultDeviceName: String by lazy { computerName() ?: if (isMac) "Mac" else "Computer" }
 
     override suspend fun readLocal(name: String): String? = withContext(Dispatchers.IO) {
         File(dir, name).takeIf { it.isFile }?.readText()

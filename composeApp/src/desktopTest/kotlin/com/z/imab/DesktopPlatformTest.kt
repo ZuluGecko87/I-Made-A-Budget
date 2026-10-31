@@ -24,4 +24,9 @@ class DesktopPlatformTest {
         assertTrue(clouds.all { it.isDirectory })
         clouds.indexOfFirst { it.name.startsWith("OneDrive") }.takeIf { it >= 0 }?.let { assertEquals(0, it) }
     }
+
+    @Test
+    fun computerNameIsReadWithoutTheNetwork() {
+        if (isMac || isWindows) assertTrue(!computerName().isNullOrBlank())
+    }
 }
