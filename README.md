@@ -1,7 +1,20 @@
 # IMAB — I Made A Budget
 
-an envelope budgeting app that works offline, importing bank statement files instead of connecting to the bank, for macOS and Android, from one Kotlin
+an envelope budgeting app that works offline, importing bank statement files instead of connecting to the bank, for macOS, Windows and Android, from one Kotlin
 codebase (Kotlin Multiplatform + Compose Multiplatform).
+
+## Install
+
+Download the latest version from the [Releases page](https://github.com/ZuluGecko87/IMAB/releases/latest):
+
+| Device | File | Notes |
+|---|---|---|
+| Android | `IMAB-<version>-android.apk` | Open it on the phone and allow installing from your browser or Files app. |
+| Mac (M1 or newer) | `IMAB-<version>-mac-apple-silicon.dmg` | Drag IMAB to Applications. The first time, macOS can't check the app: System Settings → Privacy & Security → **Open Anyway**. |
+| Mac (Intel) | `IMAB-<version>-mac-intel.dmg` | Same as above. |
+| Windows | `IMAB-<version>-windows.msi` | If SmartScreen warns about an unknown publisher: **More info → Run anyway**. |
+
+Then set up sync (below) to share one budget between devices.
 
 ## Features
 
@@ -158,6 +171,7 @@ OneDrive / Google Drive / Dropbox folder. On every other device use *Use existin
 and pick that same file.
 
 - **Mac**: cloud drives appear in the file dialog sidebar (they live under `~/Library/CloudStorage`).
+- **Windows**: OneDrive and Dropbox are folders in the sidebar; Google Drive is a drive letter with "My Drive".
 - **Android**: in the picker, open the ☰ menu and choose OneDrive, Drive or Dropbox. That service's app must be installed and signed in.
   The service's app does the uploading, and Android can block a background app's network to save
   battery, so a change made on the phone may wait until that app runs. Settings → *Open OneDrive to
@@ -183,7 +197,8 @@ back in, and a device whose own budget is newer archives the old cloud file befo
 
 ## Build
 
-Requires JDK 17 and the Android SDK (`local.properties` → `sdk.dir`).
+Requires JDK 17 and the Android SDK (`local.properties` → `sdk.dir`). The Windows installer is built
+on Windows (`packageMsi`); the Mac one on a Mac.
 
 ```sh
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
@@ -192,6 +207,8 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 ./gradlew :composeApp:packageDmg       # composeApp/build/compose/binaries/main/dmg/IMAB-<version>.dmg
 ./gradlew :composeApp:assembleDebug    # composeApp/build/outputs/apk/debug/composeApp-debug.apk
 ./gradlew :composeApp:installDebug     # install on a connected phone
+./gradlew :composeApp:packageMsi       # on Windows: composeApp/build/compose/binaries/main/msi/
+./gradlew :composeApp:assembleRelease  # signed APK, given keystore.properties (see Releases)
 ./gradlew :composeApp:desktopTest      # unit + sync tests
 ./gradlew :composeApp:desktopTest -Pscreenshots   # also render screens to composeApp/build/screenshots
 ```
@@ -199,12 +216,36 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 The version is `imab.versionName` / `imab.versionCode` in `gradle.properties` (raise the code by one
 each release); it's shown at the bottom of Settings. Changes are listed in `CHANGELOG.md`.
 
+## Releases
+
+Pushing a version tag publishes a release: set `imab.versionName` (and raise `imab.versionCode`) in
+`gradle.properties`, add the version to `CHANGELOG.md`, commit, tag it `v<version>` and push the tag.
+`.github/workflows/release.yml` checks the tag matches, builds the Android APK, both Mac DMGs and the
+Windows MSI on GitHub's machines, and publishes them with that version's changelog.
+
+Android releases are signed with the release key, which is never in the repo. GitHub gets it from
+the repository secrets `IMAB_KEYSTORE_BASE64` (the key file, base64), `IMAB_KEYSTORE_PASSWORD`,
+`IMAB_KEY_ALIAS` and `IMAB_KEY_PASSWORD`; local release builds read `keystore.properties`:
+
+```
+storeFile=/path/to/imab-release.jks
+storePassword=…
+keyAlias=imab
+keyPassword=…
+```
+
+Keep the key file and its passwords backed up: if they're lost, Android won't accept an update to
+the installed app, and people would have to uninstall it (their budget comes back from the sync file).
+
+The Mac and Windows installers aren't signed, which is why they show a warning the first time.
+
 The splash screen artwork and the app icons are drawn in code (`ui/Splash.kt`). After changing it,
 regenerate the icon files with `./gradlew :composeApp:desktopTest -Picons`, then rebuild
 `composeApp/icons/IMAB.icns` from `IMAB-1024.png` (sips + iconutil).
 
 To try the Mac app without touching your real budget, set `IMAB_DATA_DIR=/some/folder`.
-Real local data lives in `~/Library/Application Support/IMAB` on Mac and in app storage on Android.
+Real local data lives in `~/Library/Application Support/IMAB` on Mac, `%APPDATA%\IMAB` on Windows,
+and in app storage on Android.
 
 ## Layout
 
@@ -212,7 +253,7 @@ Real local data lives in `~/Library/Application Support/IMAB` on Mac and in app 
 composeApp/src/
   commonMain/   shared code: model, budget math, OFX parser, import matcher, ledger/sync, all UI
   androidMain/  Android activity, file pickers (Storage Access Framework)
-  desktopMain/  Mac entry point, file dialogs, cloud-folder file access
+  desktopMain/  Mac and Windows entry point, file dialogs, cloud-folder file access
   commonTest/   budget, import and parser tests
   desktopTest/  two-device sync tests, screenshot renderer
 ```
@@ -220,4 +261,5 @@ composeApp/src/
 ## Not built yet
 
 - Splitting one transaction across several categories.
-- Reports, goals/targets, and CSV import.
+- CSV import.
+- iOS (in progress; building it needs Xcode).

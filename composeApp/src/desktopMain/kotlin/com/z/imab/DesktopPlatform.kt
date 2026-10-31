@@ -14,17 +14,57 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 private val home = File(System.getProperty("user.home"))
+private val osName = System.getProperty("os.name").orEmpty().lowercase()
+internal val isMac = osName.contains("mac")
+internal val isWindows = osName.contains("windows")
+
+/**
+ * Where IMAB keeps its own copy of the budget: ~/Library/Application Support/IMAB on a Mac,
+ * %APPDATA%\IMAB on Windows, ~/.imab elsewhere.
+ */
+internal fun appDataDir(): File = when {
+    isMac -> File(home, "Library/Application Support/IMAB")
+    isWindows -> File(System.getenv("APPDATA")?.takeIf { it.isNotBlank() } ?: File(home, "AppData/Roaming").path, "IMAB")
+    else -> File(home, ".imab")
+}
+
+/**
+ * Folders of the cloud services' desktop apps, OneDrive first. On a Mac they mount under
+ * ~/Library/CloudStorage (Dropbox may also be ~/Dropbox). On Windows OneDrive sets %OneDrive%,
+ * Dropbox uses %USERPROFILE%\Dropbox, and Google Drive mounts a drive letter with "My Drive".
+ */
+internal fun cloudFolders(): List<File> {
+    val found = mutableListOf<File>()
+    if (isMac) {
+        File(home, "Library/CloudStorage").listFiles { f -> f.isDirectory }?.sortedBy { !it.name.startsWith("OneDrive") }?.let(found::addAll)
+    }
+    if (isWindows) {
+        listOf("OneDrive", "OneDriveConsumer", "OneDriveCommercial").mapNotNull { System.getenv(it) }.map(::File).let(found::addAll)
+        File.listRoots().map { File(it, "My Drive") }.let(found::addAll)
+    }
+    found += File(home, "OneDrive")
+    found += File(home, "Dropbox")
+    return found.filter { it.isDirectory }.distinctBy { it.absolutePath }
+}
+
+/**
+ * Windows ignores FileDialog's filename filter; a pattern in the file name box filters instead.
+ * Returns the name to start the dialog with.
+ */
+private fun FileDialog.filterTo(vararg extensions: String) {
+    setFilenameFilter { _, name -> name.substringAfterLast('.').lowercase() in extensions }
+    if (isWindows) file = extensions.joinToString(";") { "*.$it" }
+}
 
 class DesktopStorage : Storage {
     private val dir: File = run {
         // IMAB_DATA_DIR lets you run a throwaway copy without touching your real budget.
         System.getenv("IMAB_DATA_DIR")?.let { return@run File(it).apply { mkdirs() } }
-        val mac = File(home, "Library/Application Support")
-        (if (mac.isDirectory) File(mac, "IMAB") else File(home, ".imab")).apply { mkdirs() }
+        appDataDir().apply { mkdirs() }
     }
 
     override val defaultDeviceName: String =
-        runCatching { java.net.InetAddress.getLocalHost().hostName.removeSuffix(".local") }.getOrNull() ?: "Mac"
+        runCatching { java.net.InetAddress.getLocalHost().hostName.removeSuffix(".local") }.getOrNull() ?: if (isMac) "Mac" else "Computer"
 
     override suspend fun readLocal(name: String): String? = withContext(Dispatchers.IO) {
         File(dir, name).takeIf { it.isFile }?.readText()
@@ -88,17 +128,17 @@ class DesktopStorage : Storage {
 }
 
 class DesktopPickers : Pickers {
-    /** Cloud drives on macOS mount under ~/Library/CloudStorage (OneDrive, Google Drive, Dropbox). */
-    private val cloudRoot: File? = File(home, "Library/CloudStorage").takeIf { it.isDirectory }
+    private val clouds: List<File> = cloudFolders()
 
-    private fun defaultDir(): File = cloudRoot?.listFiles()?.firstOrNull { it.name.startsWith("OneDrive") }
-        ?: cloudRoot?.listFiles()?.firstOrNull { it.isDirectory }
-        ?: home
+    private fun defaultDir(): File = clouds.firstOrNull() ?: home
 
     override val supportsFileDrop = true
 
-    override val syncHint: String =
-        "On a Mac, OneDrive, Google Drive and Dropbox appear in the sidebar of the file dialog (or under ~/Library/CloudStorage)."
+    override val syncHint: String = when {
+        isMac -> "On a Mac, OneDrive, Google Drive and Dropbox appear in the sidebar of the file dialog (or under ~/Library/CloudStorage)."
+        isWindows -> "On Windows, OneDrive and Dropbox are folders in File Explorer's sidebar, and Google Drive is a drive letter with \"My Drive\". Their desktop apps must be installed and signed in."
+        else -> "Choose a folder that OneDrive, Google Drive or Dropbox syncs."
+    }
 
     override suspend fun saveFile(suggestedName: String, text: String): String? {
         val dialog = FileDialog(null as Frame?, "Save archive", FileDialog.SAVE)
@@ -114,7 +154,7 @@ class DesktopPickers : Pickers {
     override suspend fun pickArchive(): PickedFile? {
         val dialog = FileDialog(null as Frame?, "Choose an IMAB archive to restore", FileDialog.LOAD)
         dialog.directory = lastSyncFolder ?: defaultDir().path
-        dialog.setFilenameFilter { _, name -> name.endsWith(".json") }
+        dialog.filterTo("json")
         dialog.isVisible = true
         val name = dialog.file ?: return null
         val file = File(dialog.directory, name)
@@ -127,7 +167,7 @@ class DesktopPickers : Pickers {
     override suspend fun pickImportFile(): PickedFile? {
         val dialog = FileDialog(null as Frame?, "Choose a bank file (.qbo, .qfx, .ofx)", FileDialog.LOAD)
         dialog.directory = File(home, "Downloads").takeIf { it.isDirectory }?.path ?: home.path
-        dialog.setFilenameFilter { _, name -> name.substringAfterLast('.').lowercase() in setOf("qbo", "qfx", "ofx") }
+        dialog.filterTo("qbo", "qfx", "ofx")
         dialog.isVisible = true
         val name = dialog.file ?: return null
         val file = File(dialog.directory, name)
@@ -149,16 +189,18 @@ class DesktopPickers : Pickers {
     override suspend fun openSyncFile(): SyncLocation? {
         val dialog = FileDialog(null as Frame?, "Choose the existing IMAB sync file", FileDialog.LOAD)
         dialog.directory = defaultDir().path
-        dialog.setFilenameFilter { _, name -> name.endsWith(".json") }
+        dialog.filterTo("json")
         dialog.isVisible = true
         val name = dialog.file ?: return null
         val file = File(dialog.directory, name)
         return SyncLocation(file.absolutePath, displayPath(file))
     }
 
+    /** "OneDrive/Budget/IMAB-budget.json" rather than the full path, when it's in a cloud folder. */
     private fun displayPath(file: File): String {
-        val cloud = cloudRoot?.path
-        return if (cloud != null && file.path.startsWith(cloud)) file.path.removePrefix("$cloud/") else file.path
+        val cloud = clouds.firstOrNull { file.path.startsWith(it.path + File.separator) } ?: return file.path
+        // On a Mac the folder is "OneDrive-Personal" under CloudStorage; elsewhere name it after its folder.
+        return cloud.name + File.separator + file.path.removePrefix(cloud.path + File.separator)
     }
 }
 

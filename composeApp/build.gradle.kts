@@ -1,5 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -75,6 +76,26 @@ kotlin {
     }
 }
 
+/**
+ * Android release signing. On GitHub the key comes from secrets (as environment variables); locally
+ * from keystore.properties (not in git) pointing at the key file. Without either, release builds
+ * are unsigned.
+ */
+val releaseSigning: Map<String, String>? = run {
+    System.getenv("IMAB_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }?.let { file ->
+        return@run mapOf(
+            "storeFile" to file,
+            "storePassword" to System.getenv("IMAB_KEYSTORE_PASSWORD").orEmpty(),
+            "keyAlias" to System.getenv("IMAB_KEY_ALIAS").orEmpty(),
+            "keyPassword" to System.getenv("IMAB_KEY_PASSWORD").orEmpty(),
+        )
+    }
+    val local = rootProject.file("keystore.properties")
+    if (!local.isFile) return@run null
+    val props = Properties().apply { local.inputStream().use { load(it) } }
+    props.stringPropertyNames().associateWith { props.getProperty(it) }
+}
+
 android {
     namespace = "com.z.imab"
     compileSdk = 35
@@ -93,8 +114,21 @@ android {
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     }
+    signingConfigs {
+        releaseSigning?.let { s ->
+            create("release") {
+                storeFile = file(s.getValue("storeFile"))
+                storePassword = s.getValue("storePassword")
+                keyAlias = s.getValue("keyAlias")
+                keyPassword = s.getValue("keyPassword")
+            }
+        }
+    }
     buildTypes {
-        getByName("release") { isMinifyEnabled = false }
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
     }
 }
 
@@ -102,12 +136,21 @@ compose.desktop {
     application {
         mainClass = "com.z.imab.MainKt"
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi)
             packageName = "IMAB"
             packageVersion = appVersionName
             description = "I Made A Budget"
             vendor = "Z"
             modules("java.naming", "jdk.unsupported")
+            windows {
+                iconFile.set(project.file("icons/IMAB.ico"))
+                menuGroup = "IMAB"
+                shortcut = true
+                perUserInstall = true
+                dirChooser = true
+                // Keep this the same forever so new versions upgrade the installed one.
+                upgradeUuid = "e00e6839-c06e-4e15-94c1-b6cf76da11c3"
+            }
             macOS {
                 bundleID = "com.z.imab"
                 iconFile.set(project.file("icons/IMAB.icns"))

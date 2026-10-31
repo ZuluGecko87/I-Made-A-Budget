@@ -8,3 +8,8 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Android release signing (key lives outside the repo)
+keystore.properties
+*.jks
+*.keystore
