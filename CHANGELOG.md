@@ -11,6 +11,8 @@ they were made; the builds themselves said 1.0.0.
 - Installers for Android, Mac (Apple Silicon and Intel) and Windows are published on GitHub
   Releases for each version.
 - Android release builds are signed with a release key.
+- The Mac app no longer asks to find devices on the local network (it looked up the computer's
+  name over the network; it now reads it locally).
 
 ## 1.4.1 — 2026-10-27
 
