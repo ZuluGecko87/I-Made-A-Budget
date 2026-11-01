@@ -91,7 +91,8 @@ jobs:
           IMAB_KEYSTORE_PASSWORD: ${{ secrets.IMAB_KEYSTORE_PASSWORD }}
           IMAB_KEY_ALIAS: ${{ secrets.IMAB_KEY_ALIAS }}
           IMAB_KEY_PASSWORD: ${{ secrets.IMAB_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon --no-build-cache :composeApp:assembleRelease
+        run: |
+          ./gradlew --no-daemon --no-build-cache :composeApp:assembleRelease
           rm -f "$IMAB_KEYSTORE_FILE"
       - name: Rename
         run: |
@@ -108,18 +109,16 @@ jobs:
       matrix:
         include:
           - name: apple-silicon
-            arch: aarch64
-          # An Intel (x64) Java on an Apple Silicon runner, through Rosetta, packages an Intel app.
+            runner: macos-15
           - name: intel
-            arch: x64
-    runs-on: macos-14
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "17"
-          architecture: ${{ matrix.arch }}
       - name: Build
         run: ./gradlew --no-daemon --no-build-cache :composeApp:packageDmg
       - name: Rename
