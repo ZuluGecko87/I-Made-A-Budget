@@ -59,3 +59,34 @@ class ReportPeriodTest {
         assertEquals(3000, Reports.spending(b.data, ReportPeriod.last3(nov)).total)
     }
 }
+
+/** The spending report limited to chosen categories. */
+class SpendingFilterTest {
+    private val oct = YearMonth(2026, 10)
+
+    @Test
+    fun onlyTheChosenCategoriesCount() {
+        val b = Budget("dev").apply {
+            seedDefaults()
+            saveAccount(Account("chk", "Checking"), 100000, LocalDate(2026, 9, 1))
+            saveTransaction(Transaction("g", "chk", LocalDate(2026, 10, 2), -6000, "Store", categoryId = "seed-groceries"))
+            saveTransaction(Transaction("d", "chk", LocalDate(2026, 10, 3), -3000, "Cafe", categoryId = "seed-dining-out"))
+            saveTransaction(
+                Transaction(
+                    "s", "chk", LocalDate(2026, 10, 4), -1000, "Big Box",
+                    splits = listOf(com.z.imab.model.SplitLine("seed-groceries", -400), com.z.imab.model.SplitLine("seed-household", -600)),
+                )
+            )
+            saveTransaction(Transaction("g9", "chk", LocalDate(2026, 9, 2), -5000, "Store", categoryId = "seed-groceries"))
+        }
+        val all = Reports.spending(b.data, ReportPeriod.month(oct))
+        assertEquals(10000, all.total)
+        val groceries = Reports.spending(b.data, ReportPeriod.month(oct), setOf("seed-groceries"))
+        assertEquals(6400, groceries.total, "includes its share of the split")
+        assertEquals(5000, groceries.previousTotal)
+        assertEquals(listOf("seed-groceries"), groceries.byCategory.map { it.id })
+        val two = Reports.spending(b.data, ReportPeriod.month(oct), setOf("seed-groceries", "seed-household"))
+        assertEquals(7000, two.total)
+        assertEquals(listOf("Needs"), two.byGroup.map { it.name })
+    }
+}

@@ -1,7 +1,9 @@
 # IMAB — I Made A Budget
 
-an envelope budgeting app that works offline, importing bank statement files instead of connecting to the bank, for macOS, Windows and Android, from one Kotlin
-codebase (Kotlin Multiplatform + Compose Multiplatform).
+An envelope budgeting app that works offline, for macOS, Windows and Android. There's no bank
+connection: import transactions from the statement files your bank lets you download (QBO, QFX or
+OFX), or enter them by hand. Built from one Kotlin codebase (Kotlin Multiplatform + Compose
+Multiplatform).
 
 ## Install
 

@@ -4,6 +4,16 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.11.0 — 2026-11-02
+
+- **Spending by chosen categories:** the spending report covers all categories by default; the
+  **All categories** button picks just some (whole groups at once, with what each spent). It then
+  shows what they spent and their share of all spending. **Show all** goes back.
+- **Pie or bars:** the spending and income breakdowns can show as a pie: the five largest, the rest
+  as "Other", with a legend of amounts and shares. Tap a slice or legend row to read it. Each
+  category keeps its color when the filter changes.
+- The README describes IMAB in its own terms.
+
 ## 1.10.0 — 2026-11-02
 
 - **Net worth report:** a new Reports tab with what you own, what you owe and your net worth at the

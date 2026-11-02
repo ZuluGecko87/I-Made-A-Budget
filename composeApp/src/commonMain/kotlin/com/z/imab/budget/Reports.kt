@@ -122,10 +122,12 @@ object Reports {
      * Spending = money out of budget categories (refunds in the same category net against it).
      * Ready to Assign inflows, pre-existing debt and uncategorized transactions aren't spending.
      */
-    fun spending(data: BudgetData, period: ReportPeriod): SpendingReport {
-        // Split transactions count once per category line.
+    fun spending(data: BudgetData, period: ReportPeriod, only: Set<String>? = null): SpendingReport {
+        // Split transactions count once per category line; with [only], just those categories.
         fun spendingParts(t: Transaction) =
-            if (counts(data, t)) t.parts().filter { it.categoryId != null && it.categoryId in data.categories } else emptyList()
+            if (counts(data, t)) {
+                t.parts().filter { it.categoryId != null && it.categoryId in data.categories && (only == null || it.categoryId in only) }
+            } else emptyList()
         fun spent(t: Transaction) = -spendingParts(t).sumOf { it.amount }
         fun isSpending(t: Transaction) = spendingParts(t).isNotEmpty()
         val inPeriod = data.transactions.values.filter { isSpending(it) && period.contains(it) }

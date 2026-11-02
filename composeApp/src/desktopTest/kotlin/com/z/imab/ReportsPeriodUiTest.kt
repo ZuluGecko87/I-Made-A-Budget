@@ -1,5 +1,12 @@
 package com.z.imab
 
+import com.z.imab.ui.DarkColors
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
@@ -139,5 +146,61 @@ class ReportsPeriodUiTest {
             val out = File("build/screenshots").apply { mkdirs() }
             ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "reports-net-worth.png"))
         }
+    }
+
+    @Test
+    fun filterSpendingToCategoriesAndShowItAsAPie() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        val now = YearMonth.of(today())
+        val b = store.budget
+        b.saveAccount(Account("chk", "Checking"), 1000000, now.firstDay)
+        listOf(
+            "seed-groceries" to 42000L, "seed-dining-out" to 18000L, "seed-electric" to 12000L, "seed-internet" to 8000L,
+            "seed-entertainment" to 6000L, "seed-household" to 4000L, "seed-gifts" to 2000L,
+        ).forEachIndexed { i, (cat, cents) ->
+            b.saveTransaction(Transaction("t$i", "chk", now.firstDay, -cents, "Shop", categoryId = cat))
+        }
+        var dark by mutableStateOf(false)
+        setContent {
+            MaterialTheme(colorScheme = if (dark) DarkColors else LightColors) {
+                Surface { Box(Modifier.width(400.dp).fillMaxHeight().verticalScroll(rememberScrollState())) { Box(Modifier.height(1300.dp)) { ReportsScreen(store) } } }
+            }
+        }
+        fun shot(name: String) {
+            if (System.getProperty("imab.screenshots") == null) return
+            val out = File("build/screenshots").apply { mkdirs() }
+            ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"))
+        }
+
+        onNodeWithText("All categories").assertExists()
+        onNodeWithText("$920.00").assertExists()
+        onNodeWithText("Pie").performClick()
+        waitForIdle()
+        // Five largest, then Other for the remaining two.
+        onNodeWithText("Other (2)").assertExists()
+        shot("reports-pie")
+        dark = true
+        waitForIdle()
+        shot("reports-pie-dark")
+        dark = false
+
+        // Just groceries and dining out.
+        onNodeWithText("All categories").performClick()
+        waitForIdle()
+        onNodeWithText("Clear").performClick()
+        onAllNodesWithText("Groceries").onLast().performClick()
+        onAllNodesWithText("Dining Out").onLast().performClick()
+        onNodeWithText("Show 2").performClick()
+        waitForIdle()
+        onNodeWithText("2 categories").assertExists()
+        onNodeWithText("Spent in these categories").assertExists()
+        onNodeWithText("65% of $920.00").assertExists()
+        onNodeWithText("Other (2)").assertDoesNotExist()
+        shot("reports-pie-filtered")
+
+        onNodeWithText("Show all").performClick()
+        waitForIdle()
+        onNodeWithText("All categories").assertExists()
     }
 }

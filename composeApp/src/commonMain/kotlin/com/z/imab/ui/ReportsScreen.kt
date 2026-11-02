@@ -1,5 +1,22 @@
 package com.z.imab.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TriStateCheckbox
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -81,6 +98,10 @@ private enum class PeriodMode(val label: String) {
 fun ReportsScreen(store: BudgetStore) {
     val data by store.data.collectAsState()
     var tab by remember { mutableStateOf(ReportTab.SPENDING) }
+    // Kept while switching tabs and periods: which categories the spending report covers (null =
+    // all), and bars or a pie for the breakdowns.
+    var spendingFilter by remember { mutableStateOf<Set<String>?>(null) }
+    var pie by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(PeriodMode.MONTH) }
     val thisMonth = YearMonth.of(today())
     var anchor by remember { mutableStateOf(thisMonth) }
@@ -153,8 +174,8 @@ fun ReportsScreen(store: BudgetStore) {
         HorizontalDivider()
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).widthIn(max = 960.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when (tab) {
-                ReportTab.SPENDING -> SpendingReportView(data, period)
-                ReportTab.INCOME -> IncomeReportView(data, period)
+                ReportTab.SPENDING -> SpendingReportView(data, period, spendingFilter, { spendingFilter = it }, pie, { pie = it })
+                ReportTab.INCOME -> IncomeReportView(data, period, pie, { pie = it })
                 ReportTab.NET_WORTH -> NetWorthReportView(data, period)
                 ReportTab.RECURRING -> RecurringReportView(data, period)
                 ReportTab.DTI -> DebtToIncomeView(data, period)
@@ -229,6 +250,134 @@ private fun DrawScope.hBar(width: Float, color: Color) {
         )
     }
     drawPath(path, color)
+}
+
+/** Pie slice colors: the first five of the validated categorical order, then a neutral "Other". */
+private object PieColors {
+    val light = listOf(Color(0xFF2A78D6), Color(0xFFEB6834), Color(0xFF1BAF7A), Color(0xFFEDA100), Color(0xFFE87BA4))
+    val dark = listOf(Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500), Color(0xFFD55181))
+    const val SLICES = 5
+}
+
+/**
+ * Share of the total as a donut: the five largest, then the rest as "Other" (more slices can't be
+ * told apart). [colorOrder] fixes each id's color, so filtering doesn't repaint what's left. The
+ * legend beside it names every slice with its amount and share; tap a slice or a legend row to
+ * read it in the middle. Only positive amounts are shares, so net refunds are left out.
+ */
+@Composable
+private fun PieChart(rows: List<AmountRow>, colorOrder: List<String>, groupLabel: Boolean = false) {
+    val positive = rows.filter { it.amount > 0 }.sortedByDescending { it.amount }
+    if (positive.size < 2) {
+        RankedBars(rows, rows.sumOf { it.amount }, groupLabel = groupLabel)
+        return
+    }
+    val dark = MaterialTheme.colorScheme.background.let { it.red * 0.299f + it.green * 0.587f + it.blue * 0.114f } < 0.5f
+    val palette = if (dark) PieColors.dark else PieColors.light
+    val otherColor = MaterialTheme.colorScheme.outline
+    val top = positive.take(PieColors.SLICES)
+    val rest = positive.drop(PieColors.SLICES)
+    // Fixed slots for ids that hold one in the unfiltered order; the rest take the free ones in order.
+    val fixed = colorOrder.take(PieColors.SLICES).withIndex().associate { (i, id) -> id to i }
+    val free = (0 until PieColors.SLICES).filter { it !in top.mapNotNull { r -> fixed[r.id] } }.iterator()
+    val colors = top.map { r -> palette[fixed[r.id] ?: free.next()] } + if (rest.isEmpty()) emptyList() else listOf(otherColor)
+    val slices = top + if (rest.isEmpty()) emptyList() else listOf(AmountRow("other", "Other (${rest.size})", "", rest.sumOf { it.amount }))
+    val total = slices.sumOf { it.amount }.toFloat()
+    var selected by remember(rows) { mutableStateOf<Int?>(null) }
+
+    @Composable
+    fun Donut(modifier: Modifier) {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Canvas(
+                Modifier.fillMaxSize().pointerInput(slices) {
+                    detectTapGestures { pos ->
+                        val c = Offset(size.width / 2f, size.height / 2f)
+                        val d = pos - c
+                        val radius = minOf(size.width, size.height) / 2f
+                        if (d.getDistance() > radius || d.getDistance() < radius * 0.55f) { selected = null; return@detectTapGestures }
+                        // Angle from 12 o'clock, clockwise.
+                        val deg = ((kotlin.math.atan2(d.y, d.x) * 180 / kotlin.math.PI).toFloat() + 90f + 360f) % 360f
+                        var acc = 0f
+                        selected = slices.indices.firstOrNull { i -> acc += slices[i].amount / total * 360f; deg < acc }
+                    }
+                },
+            ) {
+                val stroke = minOf(size.width, size.height) * 0.2f
+                val d = minOf(size.width, size.height) - stroke
+                val topLeft = Offset((size.width - d) / 2f, (size.height - d) / 2f)
+                // A 2px gap of background between slices.
+                val gap = (2f / (d / 2f) * 180f / kotlin.math.PI.toFloat())
+                var start = -90f
+                slices.forEachIndexed { i, sl ->
+                    val sweep = sl.amount / total * 360f
+                    val c = if (selected == null || selected == i) colors[i] else colors[i].copy(alpha = 0.35f)
+                    drawArc(c, start + gap / 2, (sweep - gap).coerceAtLeast(0.5f), false, topLeft, Size(d, d), style = Stroke(stroke))
+                    start += sweep
+                }
+            }
+            val sel = selected?.let { slices[it] }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(Money.format(sel?.amount ?: total.toLong()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    sel?.let { "${(it.amount * 100f / total).roundToInt()}% · ${it.name}" } ?: "Total",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 110.dp),
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun Legend(modifier: Modifier) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            slices.forEachIndexed { i, sl ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { selected = if (selected == i) null else i }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(12.dp).background(colors[i], RoundedCornerShape(3.dp)))
+                    Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                        Text(
+                            sl.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (selected == i) FontWeight.SemiBold else null,
+                        )
+                        if (groupLabel && sl.group.isNotEmpty()) {
+                            Text(sl.group, maxLines = 1, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(Money.format(sl.amount), style = MaterialTheme.typography.bodyMedium)
+                        Text("${(sl.amount * 100f / total).roundToInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+
+    BoxWithConstraints {
+        if (maxWidth < 560.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Donut(Modifier.fillMaxWidth().height(200.dp))
+                Legend(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Donut(Modifier.size(220.dp))
+                Legend(Modifier.weight(1f))
+            }
+        }
+    }
+    if (rest.isNotEmpty()) {
+        Text(
+            "Other: " + rest.joinToString(", ") { "${it.name} ${Money.format(it.amount)}" },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /**
@@ -378,32 +527,154 @@ private fun MonthColumns(
 // ------------------------------------------------------------------ reports
 
 @Composable
-private fun SpendingReportView(data: BudgetData, period: ReportPeriod) {
-    val r = remember(data, period) { Reports.spending(data, period) }
+private fun SpendingReportView(
+    data: BudgetData,
+    period: ReportPeriod,
+    filter: Set<String>?,
+    onFilter: (Set<String>?) -> Unit,
+    pie: Boolean,
+    onPie: (Boolean) -> Unit,
+) {
+    // Categories that no longer exist drop out of the filter; none left means all.
+    val only = filter?.filter { it in data.categories }?.toSet()?.takeIf { it.isNotEmpty() }
+    val everything = remember(data, period) { Reports.spending(data, period) }
+    val r = remember(data, period, only) { if (only == null) everything else Reports.spending(data, period, only) }
     var byGroup by remember { mutableStateOf(false) }
+    var choosing by remember { mutableStateOf(false) }
+
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = { choosing = true }) {
+            Text(
+                when {
+                    only == null -> "All categories"
+                    only.size == 1 -> data.categoryName(only.first())
+                    else -> "${only.size} categories"
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(Icons.Default.ArrowDropDown, null)
+        }
+        if (only != null) TextButton(onClick = { onFilter(null) }) { Text("Show all") }
+    }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        StatTile("Total spent", Money.format(r.total), delta = (r.total - r.previousTotal).takeIf { r.previousTotal != 0L }, deltaBase = r.previousTotal, upIsGood = false)
+        StatTile(
+            if (only == null) "Total spent" else "Spent in ${if (only.size == 1) "this category" else "these categories"}",
+            Money.format(r.total),
+            delta = (r.total - r.previousTotal).takeIf { r.previousTotal != 0L }, deltaBase = r.previousTotal, upIsGood = false,
+        )
+        if (only != null && everything.total > 0) {
+            StatTile("Share of all spending", "${(r.total * 100.0 / everything.total).roundToInt()}% of ${Money.format(everything.total)}")
+        }
         if (period.monthCount > 1) StatTile("Average per month", Money.format(r.total / period.monthCount))
-        r.byCategory.firstOrNull()?.let { StatTile("Biggest category", it.name, modifier = Modifier) }
+        if (only == null || only.size > 1) r.byCategory.firstOrNull()?.let { StatTile("Biggest category", it.name, modifier = Modifier) }
     }
     if (r.total == 0L) {
-        Text("No spending in this period.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        return
+        Text(
+            if (only == null) "No spending in this period." else "No spending in the chosen categories in this period.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    } else {
+        if (period.monthCount > 1) {
+            ChartTitle("Spending by month")
+            MonthColumns(r.byMonth, "Spent")
+        }
+        ChartTitle(if (byGroup) "Spending by category group" else "Spending by category", "Net of refunds; transfers and card payments aren't spending.")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            FilterChip(!byGroup, { byGroup = false }, label = { Text("Categories") })
+            FilterChip(byGroup, { byGroup = true }, label = { Text("Groups") })
+            Spacer(Modifier.width(8.dp))
+            ChartStyleChips(pie, onPie)
+        }
+        val rows = if (byGroup) r.byGroup else r.byCategory
+        // Colors stay with each category (from the unfiltered ranking) when the filter changes.
+        val colorOrder = (if (byGroup) everything.byGroup else everything.byCategory).map { it.id }
+        if (pie) PieChart(rows, colorOrder, groupLabel = !byGroup) else RankedBars(rows, r.total, groupLabel = !byGroup)
     }
-    if (period.monthCount > 1) {
-        ChartTitle("Spending by month")
-        MonthColumns(r.byMonth, "Spent")
+    if (choosing) {
+        CategoryFilterDialog(
+            data, period, only,
+            onApply = { onFilter(it); choosing = false },
+            onDismiss = { choosing = false },
+        )
     }
-    ChartTitle(if (byGroup) "Spending by category group" else "Spending by category", "Net of refunds; transfers and card payments aren't spending.")
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilterChip(!byGroup, { byGroup = false }, label = { Text("Categories") })
-        FilterChip(byGroup, { byGroup = true }, label = { Text("Groups") })
-    }
-    RankedBars(if (byGroup) r.byGroup else r.byCategory, r.total, groupLabel = !byGroup)
+}
+
+/** Bars or pie for a breakdown. */
+@Composable
+private fun ChartStyleChips(pie: Boolean, onPie: (Boolean) -> Unit) {
+    FilterChip(!pie, { onPie(false) }, label = { Text("Bars") })
+    FilterChip(pie, { onPie(true) }, label = { Text("Pie") })
+}
+
+/**
+ * Picks the categories the spending report covers: a box per category, and one per group for all
+ * of its categories. Each shows what it spent in the period. Picking everything means all.
+ */
+@Composable
+private fun CategoryFilterDialog(
+    data: BudgetData,
+    period: ReportPeriod,
+    current: Set<String>?,
+    onApply: (Set<String>?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val spent = remember(data, period) { Reports.spending(data, period).byCategory.associate { it.id to it.amount } }
+    val groups = data.sortedGroups.map { g -> g to data.categoriesIn(g.id) }.filter { it.second.isNotEmpty() }
+    val allIds = groups.flatMap { (_, cats) -> cats.map { it.id } }.toSet()
+    val picked = remember { mutableStateListOf<String>().apply { addAll(current ?: allIds) } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Categories to include") },
+        text = {
+            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState())) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { picked.clear(); picked.addAll(allIds) }) { Text("Select all") }
+                    TextButton(onClick = { picked.clear() }) { Text("Clear") }
+                }
+                groups.forEach { (g, cats) ->
+                    val inGroup = cats.count { it.id in picked }
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            if (inGroup == cats.size) picked.removeAll(cats.map { it.id }) else cats.forEach { if (it.id !in picked) picked.add(it.id) }
+                        },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TriStateCheckbox(
+                            when (inGroup) { 0 -> ToggleableState.Off; cats.size -> ToggleableState.On; else -> ToggleableState.Indeterminate },
+                            onClick = null,
+                        )
+                        Text(g.name, Modifier.weight(1f).padding(start = 8.dp), fontWeight = FontWeight.SemiBold)
+                        Text(Money.format(cats.sumOf { spent[it.id] ?: 0 }), style = MaterialTheme.typography.bodySmall)
+                    }
+                    cats.forEach { c ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { if (c.id in picked) picked.remove(c.id) else picked.add(c.id) }.padding(start = 24.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(c.id in picked, onCheckedChange = null)
+                            Text(c.name, Modifier.weight(1f).padding(start = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                spent[c.id]?.let { Money.format(it) } ?: "—",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onApply(picked.toSet().takeIf { it != allIds }) }, enabled = picked.isNotEmpty()) {
+                Text(if (picked.isEmpty()) "Pick at least one" else "Show ${if (picked.size == allIds.size) "all" else picked.size.toString()}")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
-private fun IncomeReportView(data: BudgetData, period: ReportPeriod) {
+private fun IncomeReportView(data: BudgetData, period: ReportPeriod, pie: Boolean, onPie: (Boolean) -> Unit) {
     val r = remember(data, period) { Reports.income(data, period) }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         StatTile("Total income", Money.format(r.total), delta = (r.total - r.previousTotal).takeIf { r.previousTotal != 0L }, deltaBase = r.previousTotal, upIsGood = true)
@@ -423,7 +694,8 @@ private fun IncomeReportView(data: BudgetData, period: ReportPeriod) {
         MonthColumns(r.byMonth, "Income")
     }
     ChartTitle("Income by source")
-    RankedBars(r.bySource, r.total)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { ChartStyleChips(pie, onPie) }
+    if (pie) PieChart(r.bySource, r.bySource.map { it.id }) else RankedBars(r.bySource, r.total)
 }
 
 @Composable
