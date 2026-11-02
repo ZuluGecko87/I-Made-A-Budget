@@ -1,5 +1,6 @@
 package com.z.imab.ui
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -139,16 +140,19 @@ fun ReportsScreen(store: BudgetStore) {
         // menus have fixed widths on every platform; if text is set large, the ‹ period › control
         // moves under the menu rather than squeezing it.
         FlowRow(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp),
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Picker("Period", PeriodMode.entries.map { PickerOption(it, it.label) }, mode, { mode = it }, Modifier.width(PERIOD_MENU_WIDTH))
+            Picker(
+                "Period", PeriodMode.entries.map { PickerOption(it, it.label) }, mode, { mode = it }, Modifier.width(PERIOD_MENU_WIDTH),
+                contentPadding = PaddingValues(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            )
             when {
                 steps -> Row(Modifier.align(Alignment.CenterVertically), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { step(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Earlier") }
+                    IconButton(onClick = { step(-1) }, Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Earlier") }
                     Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1, softWrap = false)
-                    IconButton(onClick = { step(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Later") }
+                    IconButton(onClick = { step(1) }, Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Later") }
                 }
                 mode == PeriodMode.YTD -> Text(
                     label,
@@ -200,8 +204,11 @@ fun ReportsScreen(store: BudgetStore) {
 
 private fun shortMonth(m: YearMonth) = "${m.label.take(3)} ${m.year}"
 
-/** Fits "Last 12 months" at large text sizes; the same on every platform and for every choice. */
-private val PERIOD_MENU_WIDTH = 180.dp
+/**
+ * Fits "Last 12 months", and leaves room beside it for the ‹ Sep – Nov 2026 › control on a 384dp
+ * phone. The same on every platform and for every choice.
+ */
+private val PERIOD_MENU_WIDTH = 156.dp
 private val MONTH_MENU_WIDTH = 150.dp
 
 /** "$2,594.99" for tiles; "$2.6K" for axis labels. */

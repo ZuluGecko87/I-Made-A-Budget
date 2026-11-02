@@ -271,7 +271,7 @@ class ReportsPeriodUiTest {
             }
         }
         val menu = onNodeWithText("Period").fetchSemanticsNode().boundsInRoot.width
-        assertEquals(with(density) { 180.dp.toPx() }, menu, 0.5f, "a fixed width, not the window's")
+        assertEquals(with(density) { 156.dp.toPx() }, menu, 0.5f, "a fixed width, not the window's")
 
         onNodeWithText("Period").performClick()
         waitForIdle()
@@ -290,6 +290,40 @@ class ReportsPeriodUiTest {
         if (System.getProperty("imab.screenshots") != null) {
             val out = File("build/screenshots").apply { mkdirs() }
             ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "reports-wide-custom.png"))
+        }
+    }
+
+    /** The user's phone: 1080px at 450dpi is 384dp wide, at normal text size. */
+    @Test
+    fun theRangeSitsBesideTheMenuOnTheUsersPhone() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        setContent {
+            MaterialTheme(colorScheme = LightColors) {
+                Surface { Box(Modifier.width(384.dp).fillMaxHeight()) { ReportsScreen(store) } }
+            }
+        }
+        fun assertBeside(mode: String) {
+            val menu = onNodeWithText("Period").fetchSemanticsNode().boundsInRoot
+            val arrow = onNodeWithContentDescription("Later").fetchSemanticsNode().boundsInRoot
+            assertTrue(arrow.center.y in menu.top..menu.bottom, "$mode: the range wrapped under the menu")
+            assertTrue(arrow.right <= with(density) { 384.dp.toPx() }, "$mode: the range runs off the screen")
+        }
+        assertBeside("Month")
+        for (mode in listOf("Last 3 months", "Last 12 months")) {
+            onNodeWithText("Period").performClick()
+            waitForIdle()
+            onAllNodesWithText(mode).onLast().performClick()
+            waitForIdle()
+            assertBeside(mode)
+            // Also across a year boundary, the longest label.
+            repeat(11) { onNodeWithContentDescription("Earlier").performClick() }
+            waitForIdle()
+            assertBeside("$mode, a year back")
+            if (System.getProperty("imab.screenshots") != null && mode == "Last 12 months") {
+                val out = File("build/screenshots").apply { mkdirs() }
+                ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "reports-period-384.png"))
+            }
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.z.imab.ui
 
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -254,6 +256,7 @@ fun <T> Picker(
     modifier: Modifier = Modifier,
     createLabel: String? = null,
     onCreate: ((query: String) -> Unit)? = null,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
 ) {
     var open by remember { mutableStateOf(false) }
     val current = options.firstOrNull { !it.isHeader && it.value == selected }?.label ?: "Choose…"
@@ -262,6 +265,7 @@ fun <T> Picker(
             onClick = { open = true },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(6.dp),
+            contentPadding = contentPadding,
         ) {
             Column(Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

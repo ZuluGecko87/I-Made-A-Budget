@@ -4,6 +4,11 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.12.1 — 2026-11-02
+
+- **Reports on phones:** the ‹ Sep – Nov 2026 › range sits beside the Period menu again for Last 3
+  months and Last 12 months: the menu is slimmer (156dp, less padding inside) and the arrows smaller.
+
 ## 1.12.0 — 2026-11-02
 
 - **Reports:** **YTD** replaces Year: January through this month of the current year.
