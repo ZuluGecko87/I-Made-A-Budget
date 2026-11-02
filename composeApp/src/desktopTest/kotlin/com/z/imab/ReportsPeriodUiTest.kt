@@ -11,6 +11,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -20,6 +21,7 @@ import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import com.z.imab.data.BudgetStore
 import com.z.imab.model.Account
+import com.z.imab.model.AccountType
 import com.z.imab.model.Transaction
 import com.z.imab.model.YearMonth
 import com.z.imab.platform.Storage
@@ -101,5 +103,41 @@ class ReportsPeriodUiTest {
         onNodeWithText("Since the budget started").performClick()
         waitForIdle()
         onNodeWithText("21 months").assertExists()
+    }
+
+    @Test
+    fun netWorthOverTime() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        val now = YearMonth.of(today())
+        val start = now - 11
+        val b = store.budget
+        // Starts $3,000 under water and saves $500 a month.
+        b.saveAccount(Account("chk", "Checking"), 200000, start.firstDay)
+        b.saveAccount(Account("car", "Car loan", AccountType.LOAN), -500000, start.firstDay)
+        var m = start + 1
+        while (m <= now) {
+            b.saveTransaction(Transaction("s$m", "chk", m.firstDay, 50000, "Paycheck", categoryId = "rta"))
+            m += 1
+        }
+        setContent {
+            MaterialTheme(colorScheme = LightColors) {
+                Surface { Box(Modifier.width(400.dp).fillMaxHeight()) { ReportsScreen(store) } }
+            }
+        }
+        onNodeWithText("Net worth").performClick()
+        waitForIdle()
+        onNodeWithText("Period").performClick()
+        waitForIdle()
+        onAllNodesWithText("Last 12 months").onLast().performClick()
+        waitForIdle()
+        onNodeWithText("Net worth by month").assertExists()
+        // -$3,000 + 11 × $500
+        onAllNodesWithText("$2,500.00").onFirst().assertExists()
+        onNodeWithText("Own $7,500.00 · owe $5,000.00").assertExists()
+        if (System.getProperty("imab.screenshots") != null) {
+            val out = File("build/screenshots").apply { mkdirs() }
+            ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "reports-net-worth.png"))
+        }
     }
 }

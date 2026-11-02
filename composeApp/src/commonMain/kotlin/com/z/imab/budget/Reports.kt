@@ -8,6 +8,7 @@ import com.z.imab.model.READY_TO_ASSIGN
 import com.z.imab.model.STARTING_BALANCE_PAYEE
 import com.z.imab.model.Transaction
 import com.z.imab.model.YearMonth
+import kotlinx.datetime.LocalDate
 import kotlin.math.roundToLong
 
 /** An inclusive range of months a report covers. */
@@ -42,6 +43,25 @@ data class ReportPeriod(val from: YearMonth, val to: YearMonth) {
 }
 
 data class AmountRow(val id: String, val name: String, val group: String, val amount: Long)
+
+/** What you own and owe at the end of a month (or today, for the current month). */
+data class NetWorthPoint(val month: YearMonth, val assets: Long, val debts: Long) {
+    val netWorth: Long get() = assets + debts
+}
+
+data class NetWorthReport(
+    /** One per month of the period, up to the current month. */
+    val points: List<NetWorthPoint>,
+    /** Net worth just before the period started. */
+    val before: Long,
+    /** Accounts with money in them at the end: positive balances. */
+    val assets: List<AmountRow>,
+    /** Accounts owed at the end, as negative amounts. */
+    val debts: List<AmountRow>,
+) {
+    val end: NetWorthPoint? get() = points.lastOrNull()
+    val change: Long get() = (end?.netWorth ?: before) - before
+}
 
 data class SpendingReport(
     val total: Long,
@@ -143,6 +163,37 @@ object Reports {
             previousTotal = data.transactions.values.filter { isIncome(data, it) && prev.contains(it) }.sumOf(::incomeOf),
             byMonth = period.months.map { m -> m to inPeriod.filter { YearMonth.of(it.date) == m }.sumOf(::incomeOf) },
             bySource = sources,
+        )
+    }
+
+    /**
+     * Net worth: every account's balance, budget and tracking alike (loans and cards count against
+     * it), at the end of each month in [period] up to [today]'s month. An account with a positive
+     * balance is an asset; one below zero is a debt.
+     */
+    fun netWorth(data: BudgetData, period: ReportPeriod, today: LocalDate): NetWorthReport {
+        val thisMonth = YearMonth.of(today)
+        fun asOf(m: YearMonth) = if (m >= thisMonth) today else m.lastDay
+        val byAccount = data.transactionsByAccount.mapValues { (_, l) -> l.sortedBy { it.date } }
+        fun balances(on: LocalDate): Map<String, Long> =
+            byAccount.mapValues { (_, l) -> l.takeWhile { it.date <= on }.sumOf { it.amount } }.filterKeys { it in data.accounts }
+        fun point(m: YearMonth): NetWorthPoint {
+            val b = balances(asOf(m)).values
+            return NetWorthPoint(m, b.filter { it > 0 }.sum(), b.filter { it < 0 }.sum())
+        }
+        val months = period.months.filter { it <= thisMonth }
+        val points = months.map(::point)
+        val before = balances((period.from - 1).lastDay).values.sum()
+        val endDate = asOf(months.lastOrNull() ?: period.from - 1)
+        val rows = balances(endDate).filterValues { it != 0L }.map { (id, bal) ->
+            val a = data.accounts.getValue(id)
+            AmountRow(id, a.name, a.type.label + if (a.onBudget) "" else " · tracking", bal)
+        }
+        return NetWorthReport(
+            points = points,
+            before = before,
+            assets = rows.filter { it.amount > 0 }.sortedByDescending { it.amount },
+            debts = rows.filter { it.amount < 0 }.sortedBy { it.amount },
         )
     }
 

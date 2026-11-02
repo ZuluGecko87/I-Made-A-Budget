@@ -4,6 +4,16 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.10.0 — 2026-11-02
+
+- **Net worth report:** a new Reports tab with what you own, what you owe and your net worth at the
+  end of each month of the chosen period, and how much it changed since the month before.
+  - Every account counts, budget and tracking alike; cards, loans and overdrawn accounts count
+    against it. Investments count at the balance recorded in IMAB.
+  - The chart shows negative months below a zero line; tap a month for what you owned and owed.
+  - Lists the accounts you own and owe, largest first.
+- Report charts handle negative amounts, and axis labels read "-$3.0K".
+
 ## 1.9.0 — 2026-11-02
 
 - **Reports:** a **Period** menu replaces the row of chips, with two new choices:

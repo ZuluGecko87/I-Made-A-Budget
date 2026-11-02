@@ -69,7 +69,9 @@ private object ChartColors {
 @Composable
 private fun seriesColor() = if (MaterialTheme.colorScheme.background.let { it.red * 0.299f + it.green * 0.587f + it.blue * 0.114f } < 0.5f) ChartColors.seriesDark else ChartColors.seriesLight
 
-private enum class ReportTab(val label: String) { SPENDING("Spending"), INCOME("Income"), RECURRING("Recurring payments"), DTI("Debt to income") }
+private enum class ReportTab(val label: String) {
+    SPENDING("Spending"), INCOME("Income"), NET_WORTH("Net worth"), RECURRING("Recurring payments"), DTI("Debt to income"),
+}
 
 private enum class PeriodMode(val label: String) {
     MONTH("Month"), LAST3("Last 3 months"), YEAR("Year"), LAST12("Last 12 months"), CUSTOM("Custom"),
@@ -118,7 +120,7 @@ fun ReportsScreen(store: BudgetStore) {
             Picker("Period", PeriodMode.entries.map { PickerOption(it, it.label) }, mode, { mode = it }, Modifier.width(180.dp))
             if (mode != PeriodMode.CUSTOM) {
                 TextButton(onClick = { step(-1) }) { Text("‹") }
-                Text(label, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                Text(label, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleSmall, maxLines = 2, textAlign = TextAlign.Center)
                 TextButton(onClick = { step(1) }) { Text("›") }
             }
         }
@@ -153,6 +155,7 @@ fun ReportsScreen(store: BudgetStore) {
             when (tab) {
                 ReportTab.SPENDING -> SpendingReportView(data, period)
                 ReportTab.INCOME -> IncomeReportView(data, period)
+                ReportTab.NET_WORTH -> NetWorthReportView(data, period)
                 ReportTab.RECURRING -> RecurringReportView(data, period)
                 ReportTab.DTI -> DebtToIncomeView(data, period)
             }
@@ -164,6 +167,7 @@ private fun shortMonth(m: YearMonth) = "${m.label.take(3)} ${m.year}"
 
 /** "$2,594.99" for tiles; "$2.6K" for axis labels. */
 private fun compact(cents: Long): String {
+    if (cents < 0) return "-" + compact(-cents)
     val dollars = cents / 100.0
     return when {
         kotlin.math.abs(dollars) >= 1_000_000 -> "$" + ((dollars / 100_000).roundToInt() / 10.0) + "M"
@@ -176,7 +180,15 @@ private fun compact(cents: Long): String {
 
 /** Stat tile: label, value, optional change vs the previous period (colored by whether up is good). */
 @Composable
-private fun StatTile(label: String, value: String, delta: Long? = null, deltaBase: Long = 0, upIsGood: Boolean = true, modifier: Modifier = Modifier) {
+private fun StatTile(
+    label: String,
+    value: String,
+    delta: Long? = null,
+    deltaBase: Long = 0,
+    upIsGood: Boolean = true,
+    modifier: Modifier = Modifier,
+    deltaSuffix: String = "vs previous",
+) {
     Card(modifier.widthIn(min = 150.dp)) {
         Column(Modifier.padding(12.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -185,7 +197,7 @@ private fun StatTile(label: String, value: String, delta: Long? = null, deltaBas
                 val good = if (delta == 0L) null else (delta > 0) == upIsGood
                 val pct = if (deltaBase != 0L) " (${(delta * 100.0 / deltaBase).roundToInt().let { if (it > 0) "+$it" else "$it" }}%)" else ""
                 Text(
-                    (if (delta > 0) "▲ " else if (delta < 0) "▼ " else "") + Money.format(kotlin.math.abs(delta)) + pct + " vs previous",
+                    (if (delta > 0) "▲ " else if (delta < 0) "▼ " else "") + Money.format(kotlin.math.abs(delta)) + pct + " " + deltaSuffix,
                     style = MaterialTheme.typography.bodySmall,
                     color = when (good) {
                         true -> if (isSystemInDarkTheme()) ChartColors.good else Color(0xFF006300)
@@ -262,14 +274,22 @@ private fun RankedBars(rows: List<AmountRow>, total: Long, limit: Int = 10, grou
  * first. A table of the same values is one tap away.
  */
 @Composable
-private fun MonthColumns(points: List<Pair<YearMonth, Long>>, valueName: String) {
+private fun MonthColumns(
+    points: List<Pair<YearMonth, Long>>,
+    valueName: String,
+    /** An extra line for the selected month, under its value. */
+    detail: ((Int) -> String)? = null,
+) {
     if (points.isEmpty()) return
     var selected by remember(points) { mutableIntStateOf(points.lastIndex) }
     var table by remember { mutableStateOf(false) }
     val color = seriesColor()
     val grid = MaterialTheme.colorScheme.outlineVariant
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val max = points.maxOf { it.second }.coerceAtLeast(1)
+    // Columns grow up from zero, or down from it for negative values.
+    val max = points.maxOf { it.second }.coerceAtLeast(0)
+    val min = points.minOf { it.second }.coerceAtMost(0)
+    val span = (max - min).coerceAtLeast(1)
     val (m, v) = points[selected.coerceIn(points.indices)]
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -279,8 +299,9 @@ private fun MonthColumns(points: List<Pair<YearMonth, Long>>, valueName: String)
             Spacer(Modifier.width(8.dp))
             Text("$valueName · ${m.label}", style = MaterialTheme.typography.bodySmall, color = muted)
         }
+        detail?.let { Text(it(selected.coerceIn(points.indices)), style = MaterialTheme.typography.bodySmall, color = muted) }
         Row {
-            Text(compact(max), style = MaterialTheme.typography.labelSmall, color = muted, modifier = Modifier.width(44.dp))
+            Text(compact(if (max > 0 || min == 0L) max else 0), style = MaterialTheme.typography.labelSmall, color = muted, modifier = Modifier.width(44.dp))
             Spacer(Modifier.weight(1f))
         }
         Canvas(
@@ -299,27 +320,29 @@ private fun MonthColumns(points: List<Pair<YearMonth, Long>>, valueName: String)
         ) {
             val slot = size.width / points.size
             val w = minOf(24.dp.toPx(), slot * 0.6f)
-            // Gridline at the top value, baseline at zero: solid hairlines.
+            val zero = size.height * (max.toFloat() / span)
+            // Gridlines at the top and bottom values, baseline at zero: solid hairlines.
             drawLine(grid, Offset(0f, 0f), Offset(size.width, 0f), 1f)
             drawLine(grid, Offset(0f, size.height), Offset(size.width, size.height), 1f)
+            drawLine(grid, Offset(0f, zero), Offset(size.width, zero), 1f)
             points.forEachIndexed { i, (_, value) ->
-                val h = size.height * (maxOf(0, value).toFloat() / max)
+                val h = size.height * (kotlin.math.abs(value).toFloat() / span)
                 if (h <= 0f) return@forEachIndexed
                 val left = slot * i + (slot - w) / 2
-                val r = minOf(4.dp.toPx(), h)
+                val r = CornerRadius(minOf(4.dp.toPx(), h), minOf(4.dp.toPx(), h))
                 val c = if (i == selected) color else color.copy(alpha = 0.55f)
-                drawPath(
-                    Path().apply {
-                        addRoundRect(
-                            RoundRect(left, size.height - h, left + w, size.height,
-                                topLeftCornerRadius = CornerRadius(r, r), topRightCornerRadius = CornerRadius(r, r),
-                                bottomLeftCornerRadius = CornerRadius.Zero, bottomRightCornerRadius = CornerRadius.Zero),
-                        )
-                    },
-                    c,
-                )
+                // Rounded at the data end, square at zero.
+                val rect = if (value > 0) {
+                    RoundRect(left, zero - h, left + w, zero, topLeftCornerRadius = r, topRightCornerRadius = r,
+                        bottomLeftCornerRadius = CornerRadius.Zero, bottomRightCornerRadius = CornerRadius.Zero)
+                } else {
+                    RoundRect(left, zero, left + w, zero + h, topLeftCornerRadius = CornerRadius.Zero, topRightCornerRadius = CornerRadius.Zero,
+                        bottomLeftCornerRadius = r, bottomRightCornerRadius = r)
+                }
+                drawPath(Path().apply { addRoundRect(rect) }, c)
             }
         }
+        if (min < 0) Text(compact(min), style = MaterialTheme.typography.labelSmall, color = muted)
         // Month labels under the columns: as many as fit, each starting under its column. Over more
         // than a year they carry the year too ("Jan 26").
         BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -401,6 +424,52 @@ private fun IncomeReportView(data: BudgetData, period: ReportPeriod) {
     }
     ChartTitle("Income by source")
     RankedBars(r.bySource, r.total)
+}
+
+@Composable
+private fun NetWorthReportView(data: BudgetData, period: ReportPeriod) {
+    val r = remember(data, period) { Reports.netWorth(data, period, today()) }
+    val end = r.end
+    if (end == null) {
+        Text("This period hasn't started yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        StatTile(
+            "Net worth", Money.format(end.netWorth),
+            delta = r.change.takeIf { r.before != 0L || r.change != 0L }, deltaBase = kotlin.math.abs(r.before), upIsGood = true,
+            deltaSuffix = "since ${shortMonth(period.from - 1)}",
+        )
+        StatTile("What you own", Money.format(end.assets))
+        StatTile("What you owe", Money.format(-end.debts))
+    }
+    if (r.points.size > 1) {
+        ChartTitle("Net worth by month", "At the end of each month (today, for this month)")
+        MonthColumns(r.points.map { it.month to it.netWorth }, "Net worth") { i ->
+            val p = r.points[i]
+            "Own ${Money.format(p.assets)} · owe ${Money.format(-p.debts)}"
+        }
+    } else {
+        Text(
+            "Choose Last 3 months, Last 12 months or a custom period to see how it has changed over time.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (r.assets.isNotEmpty()) {
+        ChartTitle("What you own", "Accounts with money in them on ${shortMonth(end.month)}")
+        RankedBars(r.assets, end.assets, groupLabel = true)
+    }
+    if (r.debts.isNotEmpty()) {
+        ChartTitle("What you owe", "Cards, loans and overdrawn accounts")
+        RankedBars(r.debts.map { it.copy(amount = -it.amount) }, -end.debts, groupLabel = true)
+    }
+    Text(
+        "Every account counts, budget and tracking alike. Investments and property count at the balance recorded in IMAB, " +
+            "so update them (a transaction or a reconcile) to keep this current.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
