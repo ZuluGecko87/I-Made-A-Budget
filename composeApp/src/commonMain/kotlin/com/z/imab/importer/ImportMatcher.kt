@@ -61,7 +61,7 @@ object ImportMatcher {
         window: Int = DAY_WINDOW,
     ): List<ImportRow> {
         val existing = data.transactionsByAccount[accountId].orEmpty()
-        val byImportId = existing.filter { it.importId != null }.associateBy { it.importId!! }
+        val byImportId = existing.flatMap { t -> (listOfNotNull(t.importId) + t.otherImportIds).map { it to t } }.toMap()
         val claimed = HashSet<String>()
         val claimedSchedule = HashSet<String>()
         val seenInFile = HashSet<String>()

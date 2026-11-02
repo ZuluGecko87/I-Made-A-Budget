@@ -542,6 +542,42 @@ class Budget(
         saveTxn(merged)
     }
 
+    /**
+     * Merges duplicates you picked into [keepId]; the others are deleted. The kept one's amount,
+     * payee, category and memo win, with blanks filled from the others. If it wasn't imported but a
+     * duplicate was, it takes that bank copy's date and id; every other bank id is remembered too, so
+     * importing the same file again doesn't bring the duplicates back.
+     */
+    fun mergeDuplicates(keepId: String, otherIds: Collection<String>) = edit {
+        val keep = d.transactions[keepId] ?: return@edit
+        val others = otherIds.filter { it != keepId }.mapNotNull { d.transactions[it] }.filter { it.accountId == keep.accountId }
+        if (others.isEmpty()) return@edit
+        fun Transaction.hasJob() = categoryId != null || transferAccountId != null || isSplit || loanSplit != null
+        val job = if (keep.hasJob()) keep else others.firstOrNull { it.hasJob() } ?: keep
+        val bank = keep.takeIf { it.importId != null } ?: others.firstOrNull { it.importId != null }
+        val importIds = (listOf(keep) + others).flatMap { listOfNotNull(it.importId) + it.otherImportIds }.distinct()
+        // A duplicate's transfer leg is a duplicate too, unless the kept one takes over that transfer.
+        others.forEach { removeTxn(it.id, removePair = it !== job) }
+        saveTxn(
+            keep.copy(
+                date = bank?.date ?: keep.date,
+                payee = keep.payee.ifBlank { others.firstOrNull { it.payee.isNotBlank() }?.payee.orEmpty() },
+                memo = keep.memo.ifBlank { others.firstOrNull { it.memo.isNotBlank() }?.memo.orEmpty() },
+                categoryId = job.categoryId,
+                splits = job.splits,
+                transferAccountId = job.transferAccountId,
+                transferPairId = job.transferPairId,
+                loanSplit = job.loanSplit,
+                cleared = keep.cleared || others.any { it.cleared },
+                reconciled = keep.reconciled || others.any { it.reconciled },
+                merged = true,
+                importId = bank?.importId,
+                otherImportIds = importIds - listOfNotNull(bank?.importId).toSet(),
+                notDuplicateOf = (keep.notDuplicateOf + others.flatMap { it.notDuplicateOf }).distinct() - others.map { it.id }.toSet(),
+            )
+        )
+    }
+
     /** Remembers that two transactions are separate, so they're no longer offered for merging. */
     fun markNotDuplicate(enteredId: String, bankId: String) = edit {
         val entered = d.transactions[enteredId] ?: return@edit

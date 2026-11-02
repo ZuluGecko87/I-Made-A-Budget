@@ -1,6 +1,8 @@
 package com.z.imab.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
@@ -19,7 +21,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -189,6 +195,10 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
     var editingAccount by remember { mutableStateOf(false) }
     var reconciling by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    // Picking transactions to merge as duplicates.
+    var selecting by remember { mutableStateOf(false) }
+    val selected = remember { mutableStateListOf<String>() }
+    var mergingSelected by remember { mutableStateOf(false) }
 
     val all = if (uncategorizedView) data.transactions.values.filter { data.needsCategory(it) } else data.transactionsByAccount[accountId].orEmpty()
     // Running balance is computed oldest-first, then shown newest-first.
@@ -242,6 +252,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                 }
                 OutlinedButton(onClick = { nav.importInto(accountId) }) { Text("Import bank file") }
                 OutlinedButton(onClick = { reconciling = true }) { Text("Reconcile") }
+                if (!selecting) OutlinedButton(onClick = { selecting = true; selected.clear() }) { Text("Select") }
             }
             if (fileDrop) {
                 Text(
@@ -284,6 +295,13 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                 onMergeAll = { merges.forEach { store.budget.mergeTransactions(it.entered.id, it.bank.id) } },
             )
         }
+        if (selecting) {
+            SelectionBar(
+                count = selected.size,
+                onMerge = { mergingSelected = true },
+                onDone = { selecting = false; selected.clear() },
+            )
+        }
         OutlinedTextField(
             query, { query = it },
             leadingIcon = { Icon(Icons.Default.Search, null) },
@@ -311,7 +329,14 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     t, data, running.takeIf { wide && !uncategorizedView && query.isBlank() },
                     showAccount = uncategorizedView,
                     possibleDuplicate = t.id in inMerge,
-                    onClick = { editing = t },
+                    selected = if (selecting) t.id in selected else null,
+                    onClick = {
+                        when {
+                            !selecting -> editing = t
+                            t.id in selected -> selected.remove(t.id)
+                            else -> selected.add(t.id)
+                        }
+                    },
                     onToggleCleared = { store.budget.setCleared(t.id, !t.cleared) },
                 )
             }
@@ -328,6 +353,19 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             onSave = { store.budget.saveTransaction(it); adding = false; editing = null },
             onDelete = t?.let { { store.budget.deleteTransaction(it.id); editing = null } },
             onDismiss = { adding = false; editing = null },
+        )
+    }
+    if (mergingSelected) {
+        val picked = selected.mapNotNull { data.transactions[it] }
+        MergeSelectedDialog(
+            picked, data,
+            onMerge = { keepId ->
+                store.budget.mergeDuplicates(keepId, picked.map { it.id })
+                mergingSelected = false
+                selecting = false
+                selected.clear()
+            },
+            onDismiss = { mergingSelected = false },
         )
     }
     paying?.let { t ->
@@ -395,13 +433,16 @@ private fun TxnRow(
     running: Long?,
     showAccount: Boolean,
     possibleDuplicate: Boolean = false,
+    /** Whether it's ticked, while picking transactions; null otherwise. */
+    selected: Boolean? = null,
     onClick: () -> Unit,
     onToggleCleared: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, top = 6.dp, bottom = 6.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = if (selected != null) 4.dp else 16.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (selected != null) Checkbox(selected, { onClick() })
         Text(t.date.short(), Modifier.width(72.dp), style = MaterialTheme.typography.bodySmall)
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -449,6 +490,91 @@ private fun TxnRow(
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+}
+
+/** Shown while picking transactions: how many are ticked, and what can be done with them. */
+@Composable
+private fun SelectionBar(count: Int, onMerge: () -> Unit, onDone: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+    ) {
+        Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when (count) {
+                    0 -> "Tick the duplicates to merge"
+                    1 -> "1 selected · pick at least one more"
+                    else -> "$count selected"
+                },
+                Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Button(onClick = onMerge, enabled = count >= 2) { Text("Merge…") }
+            TextButton(onClick = onDone) { Text("Done") }
+        }
+    }
+}
+
+/**
+ * Merging duplicates you picked: choose the one to keep. The suggestion is the one that has a
+ * category (what you entered), otherwise the first.
+ */
+@Composable
+private fun MergeSelectedDialog(txns: List<Transaction>, data: BudgetData, onMerge: (String) -> Unit, onDismiss: () -> Unit) {
+    var keep by remember {
+        mutableStateOf(
+            (txns.firstOrNull { !data.needsCategory(it) && it.importId == null } ?: txns.firstOrNull { !data.needsCategory(it) } ?: txns.first()).id
+        )
+    }
+    val kept = txns.firstOrNull { it.id == keep } ?: txns.first()
+    val balanceChange = txns.filter { it.id != keep }.sumOf { -it.amount }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Merge ${txns.size} transactions into one") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Keep:", style = MaterialTheme.typography.labelLarge)
+                txns.sortedBy { it.date }.forEach { t ->
+                    Row(Modifier.fillMaxWidth().clickable { keep = t.id }, verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(t.id == keep, { keep = t.id })
+                        Column(Modifier.weight(1f)) {
+                            Text("${t.date.short()} · ${data.payeeLabel(t)}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                data.categoryLabel(t) + (if (t.importId != null) " · from bank" else "") + if (t.memo.isNotBlank()) " · ${t.memo}" else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(Money.format(t.amount), color = amountColor(t.amount))
+                    }
+                }
+                Text(
+                    "The others are deleted. The one you keep is marked Merged and keeps its payee, category and memo; " +
+                        "anything it's missing comes from the others. If one came from the bank, the bank's date is used " +
+                        "and importing the same bank file won't add the duplicates again.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (txns.any { it.amount != kept.amount }) {
+                    Text(
+                        "The amounts aren't all the same. The kept one's amount is used, so the balance changes by " +
+                            "${Money.format(balanceChange)}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    Text(
+                        "The balance changes by ${Money.format(balanceChange)}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = { Button(onClick = { onMerge(keep) }) { Text("Merge") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /** Marks a transaction you entered that was merged with the bank's copy of it. */

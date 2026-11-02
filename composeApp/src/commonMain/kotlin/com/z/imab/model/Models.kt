@@ -184,6 +184,8 @@ data class Transaction(
      * [categoryId] is null.
      */
     val splits: List<SplitLine> = emptyList(),
+    /** Bank ids of duplicates merged into this one, so importing them again finds this transaction. */
+    val otherImportIds: List<String> = emptyList(),
 ) {
     val isSplit: Boolean get() = splits.isNotEmpty()
 

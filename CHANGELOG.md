@@ -4,6 +4,15 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.8.0 — 2026-11-02
+
+- **Merge duplicates yourself:** in an account, **Select**, tick the copies of the same transaction,
+  then **Merge…** and choose which one to keep. The others are deleted; the kept one is marked
+  Merged and fills a missing payee, category or memo from the others. A duplicated transfer's other
+  leg goes too.
+- When a merged copy came from the bank, its bank id is remembered, so importing the same file
+  again doesn't bring the duplicate back.
+
 ## 1.7.0 — 2026-11-02
 
 - **Split transactions:** "Split across categories" in the transaction form shares one transaction
