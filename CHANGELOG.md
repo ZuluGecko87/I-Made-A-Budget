@@ -4,6 +4,14 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.9.0 — 2026-11-02
+
+- **Reports:** a **Period** menu replaces the row of chips, with two new choices:
+  - **Last 3 months**, stepped a month at a time with ‹ › like the others.
+  - **Custom:** pick a From and To month, as far back as the month the budget started. It opens on
+    the whole budget, and "Since the budget started" goes back to that.
+- Monthly charts over long ranges label as many months as fit, with the year ("Jan 26").
+
 ## 1.8.1 — 2026-11-02
 
 - **Account screen on phones:** only the account name and the cleared, uncleared and working

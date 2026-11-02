@@ -71,23 +71,32 @@ private fun seriesColor() = if (MaterialTheme.colorScheme.background.let { it.re
 
 private enum class ReportTab(val label: String) { SPENDING("Spending"), INCOME("Income"), RECURRING("Recurring payments"), DTI("Debt to income") }
 
-private enum class PeriodMode(val label: String) { MONTH("Month"), YEAR("Year"), LAST12("Last 12 months") }
+private enum class PeriodMode(val label: String) {
+    MONTH("Month"), LAST3("Last 3 months"), YEAR("Year"), LAST12("Last 12 months"), CUSTOM("Custom"),
+}
 
 @Composable
 fun ReportsScreen(store: BudgetStore) {
     val data by store.data.collectAsState()
     var tab by remember { mutableStateOf(ReportTab.SPENDING) }
     var mode by remember { mutableStateOf(PeriodMode.MONTH) }
-    var anchor by remember { mutableStateOf(YearMonth.of(today())) }
+    val thisMonth = YearMonth.of(today())
+    var anchor by remember { mutableStateOf(thisMonth) }
+    // A custom range can go back to the month the budget started.
+    val start = remember(data) { minOf(ReportPeriod.budgetStart(data) ?: thisMonth, thisMonth) }
+    var customFrom by remember { mutableStateOf<YearMonth?>(null) }
+    var customTo by remember { mutableStateOf<YearMonth?>(null) }
     val period = when (mode) {
         PeriodMode.MONTH -> ReportPeriod.month(anchor)
+        PeriodMode.LAST3 -> ReportPeriod.last3(anchor)
         PeriodMode.YEAR -> ReportPeriod.year(anchor.year)
         PeriodMode.LAST12 -> ReportPeriod.last12(anchor)
+        PeriodMode.CUSTOM -> ReportPeriod.between(customFrom ?: start, customTo ?: thisMonth)
     }
     val label = when (mode) {
         PeriodMode.MONTH -> anchor.label
         PeriodMode.YEAR -> anchor.year.toString()
-        PeriodMode.LAST12 -> "${shortMonth(period.from)} – ${shortMonth(period.to)}"
+        else -> "${shortMonth(period.from)} – ${shortMonth(period.to)}"
     }
     fun step(by: Int) {
         anchor = when (mode) {
@@ -101,17 +110,42 @@ fun ReportsScreen(store: BudgetStore) {
         PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 8.dp) {
             ReportTab.entries.forEach { t -> Tab(selected = tab == t, onClick = { tab = t }, text = { Text(t.label) }) }
         }
-        // One time control above everything it scopes.
-        FlowRow(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        // One time control above everything it scopes: what kind of period, then which one.
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            PeriodMode.entries.forEach { m -> FilterChip(mode == m, { mode = m }, label = { Text(m.label) }) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Picker("Period", PeriodMode.entries.map { PickerOption(it, it.label) }, mode, { mode = it }, Modifier.width(180.dp))
+            if (mode != PeriodMode.CUSTOM) {
                 TextButton(onClick = { step(-1) }) { Text("‹") }
-                Text(label, style = MaterialTheme.typography.titleSmall)
+                Text(label, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleSmall, maxLines = 1)
                 TextButton(onClick = { step(1) }) { Text("›") }
+            }
+        }
+        if (mode == PeriodMode.CUSTOM) {
+            // Newest first, back to the month the budget started.
+            val months = generateSequence(maxOf(thisMonth, period.to)) { it - 1 }.takeWhile { it >= minOf(start, period.from) }
+                .map { PickerOption(it, shortMonth(it)) }.toList()
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Picker("From", months, period.from, { customFrom = it; if (it > period.to) customTo = it }, Modifier.weight(1f))
+                Picker("To", months, period.to, { customTo = it; if (it < period.from) customFrom = it }, Modifier.weight(1f))
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "${period.monthCount} month${if (period.monthCount == 1) "" else "s"}",
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { customFrom = start; customTo = thisMonth }) { Text("Since the budget started") }
             }
         }
         HorizontalDivider()
@@ -286,17 +320,21 @@ private fun MonthColumns(points: List<Pair<YearMonth, Long>>, valueName: String)
                 )
             }
         }
-        // Month labels under each column (every other one when there's no room).
+        // Month labels under the columns: as many as fit, each starting under its column. Over more
+        // than a year they carry the year too ("Jan 26").
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val every = if (maxWidth / points.size < 32.dp) 2 else 1
+            val withYear = points.size > 12
+            val room = if (withYear) 48.dp else 32.dp
+            val every = kotlin.math.ceil(points.size * room.value / maxWidth.value.coerceAtLeast(1f)).toInt().coerceAtLeast(1)
             Row(Modifier.fillMaxWidth()) {
-                points.forEachIndexed { i, (month, _) ->
+                points.chunked(every).forEachIndexed { c, chunk ->
+                    val month = chunk.first().first
                     Text(
-                        if (i % every == 0) month.label.take(3) else "",
-                        Modifier.weight(1f),
+                        if (withYear) "${month.label.take(3)} ${month.year % 100}" else month.label.take(3),
+                        Modifier.weight(chunk.size.toFloat()),
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (i == selected) MaterialTheme.colorScheme.onSurface else muted,
-                        textAlign = TextAlign.Center,
+                        color = if (selected in c * every until c * every + chunk.size) MaterialTheme.colorScheme.onSurface else muted,
+                        textAlign = if (every == 1) TextAlign.Center else TextAlign.Start,
                         maxLines = 1,
                     )
                 }
