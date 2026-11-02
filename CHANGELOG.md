@@ -4,6 +4,16 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.8.1 — 2026-11-02
+
+- **Account screen on phones:** only the account name and the cleared, uncleared and working
+  balances stay at the top. The buttons and notices scroll away with the transactions, so the list
+  gets most of the screen, also with the keyboard up. The search bar is slimmer and stays at the
+  top of the list while you scroll.
+- The **Select** button is now **Merge duplicates**, and a long press on a transaction starts
+  picking duplicates with it ticked.
+- Merging two bank copies always takes the earliest one's date.
+
 ## 1.8.0 — 2026-11-02
 
 - **Merge duplicates yourself:** in an account, **Select**, tick the copies of the same transaction,

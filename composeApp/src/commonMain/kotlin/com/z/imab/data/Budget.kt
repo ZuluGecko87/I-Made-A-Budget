@@ -550,7 +550,9 @@ class Budget(
      */
     fun mergeDuplicates(keepId: String, otherIds: Collection<String>) = edit {
         val keep = d.transactions[keepId] ?: return@edit
+        // Earliest first, so the result doesn't depend on the order they were picked in.
         val others = otherIds.filter { it != keepId }.mapNotNull { d.transactions[it] }.filter { it.accountId == keep.accountId }
+            .sortedWith(compareBy({ it.date }, { it.id }))
         if (others.isEmpty()) return@edit
         fun Transaction.hasJob() = categoryId != null || transferAccountId != null || isSplit || loanSplit != null
         val job = if (keep.hasJob()) keep else others.firstOrNull { it.hasJob() } ?: keep

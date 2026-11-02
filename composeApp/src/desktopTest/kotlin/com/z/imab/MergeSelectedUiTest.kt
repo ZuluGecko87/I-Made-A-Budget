@@ -1,5 +1,10 @@
 package com.z.imab
 
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
@@ -65,9 +70,9 @@ class MergeSelectedUiTest {
         setContent { App(store, NoPickers, nav, showSplash = false) }
         waitForIdle()
 
-        onNodeWithText("Select").performClick()
+        onNodeWithText("Merge duplicates").performClick()
         waitForIdle()
-        onNodeWithText("Tick the duplicates to merge").assertExists()
+        onNodeWithText("Tick the copies of the same transaction").assertExists()
         onNodeWithText("Merge…").assertIsNotEnabled()
         onNodeWithText("Corner Bakery").performClick()
         onNodeWithText("CORNER BAKERY 0042").performClick()
@@ -90,6 +95,30 @@ class MergeSelectedUiTest {
         assertEquals(listOf("a"), left.map { it.id })
         assertTrue(left.single().merged)
         onNodeWithText("CORNER BAKERY 0042").assertDoesNotExist()
-        onNodeWithText("Select").assertExists()
+        onNodeWithText("Merge duplicates").assertExists()
+    }
+
+    @Test
+    fun longPressStartsPickingAndTheSearchBarStaysPut() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        store.setEncryptionReminder(false)
+        val b = store.budget
+        b.saveAccount(Account("chk", "Everyday Checking"), 50000, LocalDate(2026, 9, 1))
+        for (d in 1..28) b.saveTransaction(Transaction("t$d", "chk", LocalDate(2026, 10, d), -100L * d, "Shop $d"))
+        val nav = NavState().apply { openAccount("chk") }
+        setContent { App(store, NoPickers, nav, showSplash = false) }
+        waitForIdle()
+
+        onNodeWithText("Shop 28").performTouchInput { longClick() }
+        waitForIdle()
+        onNodeWithText("1 selected · pick at least one more").assertExists()
+
+        // Scrolling down takes the buttons off screen but keeps the balances and the search bar.
+        onNode(hasScrollToIndexAction()).performScrollToIndex(25)
+        waitForIdle()
+        onNodeWithText("Import bank file").assertDoesNotExist()
+        onNodeWithText("Working balance").assertIsDisplayed()
+        onNodeWithText("Search payee, category, memo, amount").assertIsDisplayed()
     }
 }

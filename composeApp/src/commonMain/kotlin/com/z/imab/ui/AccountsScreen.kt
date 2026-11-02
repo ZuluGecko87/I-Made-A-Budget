@@ -1,6 +1,12 @@
 package com.z.imab.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -8,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -30,7 +35,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.filled.Warning
@@ -229,7 +233,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             if (!uncategorizedView) IconButton(onClick = { editingAccount = true }) { Icon(Icons.Default.Edit, "Edit account") }
         }
         if (!uncategorizedView) {
-            FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            FlowRow(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 val total = data.balance(accountId)
                 val cleared = data.clearedBalance(accountId)
                 if (account!!.type.isCredit || account.type.isLoan) {
@@ -243,78 +247,89 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     Balance("Working balance", total)
                 }
             }
-            FlowRow(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { adding = true }) { Icon(Icons.Default.Add, null); Text("Add transaction") }
-                if (isCard && data.sortedAccounts.size > 1) {
-                    OutlinedButton(onClick = { paying = paymentTemplate(data, accountId, cardInfo?.available ?: 0, store.budget.newId()) }) {
-                        Text("Make payment")
+        }
+        HorizontalDivider()
+        // Everything below the balances scrolls with the transactions; the search bar stays at the top of the list.
+        LazyColumn(Modifier.weight(1f)) {
+            if (!uncategorizedView) {
+                item(key = "actions") {
+                    Column {
+                        FlowRow(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { adding = true }) { Icon(Icons.Default.Add, null); Text("Add transaction") }
+                            if (isCard && data.sortedAccounts.size > 1) {
+                                OutlinedButton(onClick = { paying = paymentTemplate(data, accountId, cardInfo?.available ?: 0, store.budget.newId()) }) {
+                                    Text("Make payment")
+                                }
+                            }
+                            OutlinedButton(onClick = { nav.importInto(accountId) }) { Text("Import bank file") }
+                            OutlinedButton(onClick = { reconciling = true }) { Text("Reconcile") }
+                            if (!selecting) OutlinedButton(onClick = { selecting = true; selected.clear() }) { Text("Merge duplicates") }
+                        }
+                        if (fileDrop) {
+                            Text(
+                                "Tip: drag a .qbo, .qfx or .ofx file onto this window to import it into ${account!!.name}.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                            )
+                        }
+                        if (account?.type?.isLoan == true) LoanSummary(account, data) { editingAccount = true }
+                        account?.lastReconciled?.let { date ->
+                            val bal = account.reconciledBalance
+                            Text(
+                                "Last reconciled ${date.short()}" + (bal?.let {
+                                    " at " + if ((account.type.isCredit || account.type.isLoan) && it < 0) "${Money.format(-it)} owed" else Money.format(it)
+                                } ?: "") + " · 🔒 transactions up to then are locked",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                            )
+                        }
+                        cardInfo?.let { c ->
+                            Text(
+                                when {
+                                    c.owed <= 0 -> "Paid off. Spending on this card moves money from its category into the payment category."
+                                    c.underfunded == 0L -> "Payment category has ${Money.format(c.available)} set aside — enough to pay the ${Money.format(c.owed)} balance."
+                                    else -> "Payment category has ${Money.format(maxOf(0, c.available))} set aside; ${Money.format(c.underfunded)} of the ${Money.format(c.owed)} balance isn't covered yet."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (c.underfunded > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                            )
+                        }
                     }
                 }
-                OutlinedButton(onClick = { nav.importInto(accountId) }) { Text("Import bank file") }
-                OutlinedButton(onClick = { reconciling = true }) { Text("Reconcile") }
-                if (!selecting) OutlinedButton(onClick = { selecting = true; selected.clear() }) { Text("Select") }
             }
-            if (fileDrop) {
-                Text(
-                    "Tip: drag a .qbo, .qfx or .ofx file onto this window to import it into ${account!!.name}.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                )
+            if (merges.isNotEmpty()) {
+                item(key = "merge-banner") {
+                    MergeBanner(
+                        count = merges.size,
+                        reviewing = reviewingMerges,
+                        onReview = { reviewingMerges = !reviewingMerges },
+                        onMergeAll = { merges.forEach { store.budget.mergeTransactions(it.entered.id, it.bank.id) } },
+                    )
+                }
             }
-            if (account?.type?.isLoan == true) LoanSummary(account, data) { editingAccount = true }
-            account?.lastReconciled?.let { date ->
-                val bal = account.reconciledBalance
-                Text(
-                    "Last reconciled ${date.short()}" + (bal?.let {
-                        " at " + if ((account.type.isCredit || account.type.isLoan) && it < 0) "${Money.format(-it)} owed" else Money.format(it)
-                    } ?: "") + " · 🔒 transactions up to then are locked",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                )
+            stickyHeader(key = "search") {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    Column {
+                        if (selecting) {
+                            SelectionBar(
+                                count = selected.size,
+                                onMerge = { mergingSelected = true },
+                                onDone = { selecting = false; selected.clear() },
+                            )
+                        }
+                        SearchBar(query, { query = it }, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp))
+                        HorizontalDivider()
+                    }
+                }
             }
-            cardInfo?.let { c ->
-                Text(
-                    when {
-                        c.owed <= 0 -> "Paid off. Spending on this card moves money from its category into the payment category."
-                        c.underfunded == 0L -> "Payment category has ${Money.format(c.available)} set aside — enough to pay the ${Money.format(c.owed)} balance."
-                        else -> "Payment category has ${Money.format(maxOf(0, c.available))} set aside; ${Money.format(c.underfunded)} of the ${Money.format(c.owed)} balance isn't covered yet."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (c.underfunded > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                )
+            if (rows.isEmpty()) {
+                item(key = "empty") {
+                    Text(if (uncategorizedView) "Everything has a category." else "No transactions yet.", Modifier.padding(16.dp))
+                }
             }
-        }
-        if (merges.isNotEmpty()) {
-            MergeBanner(
-                count = merges.size,
-                reviewing = reviewingMerges,
-                onReview = { reviewingMerges = !reviewingMerges },
-                onMergeAll = { merges.forEach { store.budget.mergeTransactions(it.entered.id, it.bank.id) } },
-            )
-        }
-        if (selecting) {
-            SelectionBar(
-                count = selected.size,
-                onMerge = { mergingSelected = true },
-                onDone = { selecting = false; selected.clear() },
-            )
-        }
-        OutlinedTextField(
-            query, { query = it },
-            leadingIcon = { Icon(Icons.Default.Search, null) },
-            placeholder = { Text("Search payee, category, memo, amount") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        )
-        Spacer(Modifier.padding(4.dp))
-        HorizontalDivider()
-        if (rows.isEmpty()) {
-            Text(if (uncategorizedView) "Everything has a category." else "No transactions yet.", Modifier.padding(16.dp))
-        }
-        LazyColumn(Modifier.weight(1f)) {
             if (reviewingMerges) {
                 items(merges, key = { "merge-${it.entered.id}-${it.bank.id}" }) { c ->
                     MergeCard(
@@ -337,6 +352,11 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                             else -> selected.add(t.id)
                         }
                     },
+                    // A long press starts picking duplicates, with this one ticked.
+                    onLongClick = if (uncategorizedView) null else ({
+                        if (!selecting) { selecting = true; selected.clear() }
+                        if (t.id !in selected) selected.add(t.id)
+                    }),
                     onToggleCleared = { store.budget.setCleared(t.id, !t.cleared) },
                 )
             }
@@ -436,10 +456,11 @@ private fun TxnRow(
     /** Whether it's ticked, while picking transactions; null otherwise. */
     selected: Boolean? = null,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     onToggleCleared: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = if (selected != null) 4.dp else 16.dp, top = 6.dp, bottom = 6.dp),
+        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(start = if (selected != null) 4.dp else 16.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (selected != null) Checkbox(selected, { onClick() })
@@ -492,6 +513,35 @@ private fun TxnRow(
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
 
+/** A slim search box, so it doesn't take much of a phone screen. */
+@Composable
+private fun SearchBar(query: String, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier.height(40.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Search, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
+                if (query.isEmpty()) {
+                    Text("Search payee, category, memo, amount", color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                BasicTextField(
+                    query, onChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onChange("") }, Modifier.size(28.dp)) { Icon(Icons.Default.Close, "Clear search", Modifier.size(18.dp)) }
+            }
+        }
+    }
+}
+
 /** Shown while picking transactions: how many are ticked, and what can be done with them. */
 @Composable
 private fun SelectionBar(count: Int, onMerge: () -> Unit, onDone: () -> Unit) {
@@ -502,7 +552,7 @@ private fun SelectionBar(count: Int, onMerge: () -> Unit, onDone: () -> Unit) {
         Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 when (count) {
-                    0 -> "Tick the duplicates to merge"
+                    0 -> "Tick the copies of the same transaction"
                     1 -> "1 selected · pick at least one more"
                     else -> "$count selected"
                 },
