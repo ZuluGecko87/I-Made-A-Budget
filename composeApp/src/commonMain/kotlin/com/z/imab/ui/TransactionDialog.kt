@@ -6,7 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -15,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,6 +36,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.z.imab.model.Money
 import com.z.imab.model.ScheduledTransaction
+import com.z.imab.model.SplitLine
 import com.z.imab.model.Transaction
 import kotlinx.datetime.LocalDate
 import kotlin.math.abs
@@ -59,8 +66,102 @@ private class TxnForm(
         if (Choice.transferId(choice) != null) null else Choice.categoryId(choice)
 }
 
+/** One line of a split: a category and its share, typed in the transaction's direction. */
+private class SplitLineForm(choice: String, amountText: String) {
+    var choice by mutableStateOf(choice)
+    var amountText by mutableStateOf(amountText)
+
+    /** Signed amount: blank counts as nothing, null means it can't be read. */
+    fun amount(outflow: Boolean): Long? =
+        if (amountText.isBlank()) 0 else Money.eval(amountText)?.let { if (outflow) -it else it }
+}
+
+/** The category lines of a split transaction; empty while it isn't split. */
+private class SplitForm(initial: Transaction?) {
+    val lines = mutableStateListOf<SplitLineForm>().apply {
+        initial?.splits?.forEach { add(SplitLineForm(Choice.of(it.categoryId, null), Money.toInput(if (initial.amount < 0) -it.amount else it.amount))) }
+    }
+    val active: Boolean get() = lines.isNotEmpty()
+
+    /** Starts with the current category holding the whole amount, plus an empty line. */
+    fun start(form: TxnForm) {
+        lines += SplitLineForm(form.choice.takeIf { Choice.transferId(it) == null } ?: Choice.NONE, form.amountText)
+        lines += SplitLineForm(Choice.NONE, "")
+    }
+
+    /** Back to one category: the first line's. */
+    fun stop(form: TxnForm) {
+        form.choice = lines.firstOrNull()?.choice ?: Choice.NONE
+        lines.clear()
+    }
+
+    /** Total of the lines, or null if one of them can't be read. */
+    fun total(outflow: Boolean): Long? {
+        var sum = 0L
+        for (l in lines) sum += l.amount(outflow) ?: return null
+        return sum
+    }
+
+    fun ready(form: TxnForm): Boolean = !active || (form.amount != null && total(form.outflow) == form.amount)
+
+    /** Lines with an amount; blank ones are dropped. */
+    fun toSplits(outflow: Boolean): List<SplitLine> = lines.mapNotNull { l ->
+        l.amount(outflow)?.takeIf { it != 0L }?.let { SplitLine(Choice.categoryId(l.choice), it) }
+    }
+
+    /** Puts what's left over in the last empty line (or the last line). */
+    fun fillRemaining(form: TxnForm) {
+        val amount = form.amount ?: return
+        val left = amount - (total(form.outflow) ?: return)
+        val line = lines.lastOrNull { it.amountText.isBlank() } ?: lines.last()
+        val now = (line.amount(form.outflow) ?: 0) + left
+        line.amountText = Money.toInput(if (form.outflow) -now else now)
+    }
+}
+
+/** Category and amount for each part of a split transaction, with what's left to split. */
 @Composable
-private fun TxnFields(form: TxnForm, data: BudgetData, dateLabel: String) {
+private fun SplitLines(split: SplitForm, form: TxnForm, data: BudgetData) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Split across categories", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+        TextButton(onClick = { split.stop(form) }) { Text("Unsplit") }
+    }
+    split.lines.forEachIndexed { i, line ->
+        if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        CategoryPicker("Category ${i + 1}", data, form.accountId, line.choice, { line.choice = it }, Modifier.fillMaxWidth(), allowTransfers = false)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val value = line.amount(form.outflow)
+            MoneyField(
+                "Amount ${i + 1}", line.amountText, { line.amountText = it }, Modifier.weight(1f),
+                isError = value == null, result = value?.let { if (form.outflow) -it else it },
+            )
+            if (split.lines.size > 2) {
+                IconButton(onClick = { split.lines.removeAt(i) }) { Icon(Icons.Default.Close, "Remove category ${i + 1}") }
+            }
+        }
+    }
+    TextButton(onClick = { split.lines += SplitLineForm(Choice.NONE, "") }) { Text("+ Add another category") }
+    val amount = form.amount
+    val total = split.total(form.outflow)
+    when {
+        total == null -> Text("One of the amounts isn't a number.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        amount == null -> Text("Enter the transaction's total above; the categories must add up to it.", style = MaterialTheme.typography.bodySmall)
+        total == amount -> Text("✓ The categories add up to ${Money.format(kotlin.math.abs(amount))}.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+        else -> Row(verticalAlignment = Alignment.CenterVertically) {
+            val left = if (form.outflow) total - amount else amount - total
+            Text(
+                if (left > 0) "${Money.format(left)} left to split" else "Over by ${Money.format(-left)}",
+                Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (left > 0) TextButton(onClick = { split.fillRemaining(form) }) { Text("Fill in the rest") }
+        }
+    }
+}
+
+@Composable
+private fun TxnFields(form: TxnForm, data: BudgetData, dateLabel: String, split: SplitForm? = null, canSplit: Boolean = false) {
     val accounts = data.sortedAccounts.filter { !it.closed || it.id == form.accountId }
     Picker("Account", accounts.map { PickerOption(it.id, it.name) }, form.accountId, { form.accountId = it }, Modifier.fillMaxWidth())
     DateField(dateLabel, form.date, { form.date = it }, Modifier.fillMaxWidth())
@@ -68,7 +169,12 @@ private fun TxnFields(form: TxnForm, data: BudgetData, dateLabel: String) {
     if (!isTransfer) {
         PayeeField(form.payee, { form.payee = it }, data, Modifier.fillMaxWidth())
     }
-    CategoryPicker("Category or transfer", data, form.accountId, form.choice, { form.choice = it }, Modifier.fillMaxWidth())
+    if (split?.active != true) {
+        CategoryPicker("Category or transfer", data, form.accountId, form.choice, { form.choice = it }, Modifier.fillMaxWidth())
+        if (split != null && canSplit && !isTransfer) {
+            TextButton(onClick = { split.start(form) }) { Text("Split across categories") }
+        }
+    }
     if (isTransfer) {
         val other = Choice.transferId(form.choice)
         if (data.isOnBudget(form.accountId) == data.isOnBudget(other)) {
@@ -86,6 +192,7 @@ private fun TxnFields(form: TxnForm, data: BudgetData, dateLabel: String) {
     }
     MoneyField("Amount", form.amountText, { form.amountText = it }, Modifier.fillMaxWidth(), isError = form.amountText.isNotEmpty() && Money.parse(form.amountText) == null)
     OutlinedTextField(form.memo, { form.memo = it }, label = { Text("Memo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    if (split?.active == true) SplitLines(split, form, data)
 }
 
 @Composable
@@ -108,6 +215,7 @@ fun TransactionDialog(
             choice = Choice.of(initial?.categoryId, initial?.transferAccountId),
         )
     }
+    val split = remember { SplitForm(initial) }
     var cleared by remember { mutableStateOf(initial?.cleared ?: false) }
     var loanId by remember { mutableStateOf(initial?.loanSplit?.loanAccountId) }
     var reconciled by remember { mutableStateOf(initial?.reconciled ?: false) }
@@ -121,9 +229,10 @@ fun TransactionDialog(
         title = { Text(if (isCardPayment) "Record card payment" else if (isNew) "Add transaction" else "Edit transaction") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TxnFields(form, data, "Date")
+                // A loan payment is already split into principal, interest and escrow.
+                TxnFields(form, data, "Date", split, canSplit = loanId == null)
                 val loans = data.loanAccounts.filter { it.id != form.accountId }
-                if (loans.isNotEmpty() && form.outflow && Choice.transferId(form.choice) == null) {
+                if (loans.isNotEmpty() && form.outflow && Choice.transferId(form.choice) == null && !split.active) {
                     Picker(
                         "Loan payment",
                         listOf(PickerOption<String?>(null, "Not a loan payment")) + loans.map { PickerOption<String?>(it.id, "Payment on ${it.name}") },
@@ -162,10 +271,11 @@ fun TransactionDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = form.valid, onClick = {
+            TextButton(enabled = form.valid && split.ready(form), onClick = {
                 val amount = form.amount ?: return@TextButton
                 val base = initial ?: Transaction(newId(), form.accountId, form.date, amount)
-                val transfer = Choice.transferId(form.choice)
+                val transfer = Choice.transferId(form.choice).takeIf { !split.active }
+                val splits = if (split.active) split.toSplits(form.outflow) else emptyList()
                 onSave(
                     base.copy(
                         accountId = form.accountId,
@@ -173,13 +283,14 @@ fun TransactionDialog(
                         amount = amount,
                         payee = if (transfer != null) "" else form.payee.trim(),
                         memo = form.memo.trim(),
-                        categoryId = form.categoryToSave(data),
+                        categoryId = if (split.active) null else form.categoryToSave(data),
+                        splits = splits,
                         transferAccountId = transfer,
                         // Changing the transfer target re-links to a new leg.
                         transferPairId = base.transferPairId.takeIf { transfer != null && transfer == base.transferAccountId },
                         cleared = cleared || reconciled,
                         reconciled = reconciled,
-                        loanSplit = loanId?.takeIf { transfer == null && amount < 0 }?.let { id ->
+                        loanSplit = loanId?.takeIf { transfer == null && amount < 0 && !split.active }?.let { id ->
                             base.loanSplit?.takeIf { it.loanAccountId == id } ?: com.z.imab.model.LoanSplit(id, 0, 0, 0)
                         },
                     )

@@ -179,6 +179,23 @@ data class Transaction(
     val reconciled: Boolean = false,
     /** Entered by hand, then merged with the same transaction from a bank import. */
     val merged: Boolean = false,
+    /**
+     * Set when the amount is split across categories. The lines add up to [amount] and
+     * [categoryId] is null.
+     */
+    val splits: List<SplitLine> = emptyList(),
+) {
+    val isSplit: Boolean get() = splits.isNotEmpty()
+
+    /** What this transaction puts in each category: its split lines, or the whole amount in [categoryId]. */
+    fun parts(): List<SplitLine> = splits.ifEmpty { listOf(SplitLine(categoryId, amount)) }
+}
+
+/** One category's share of a split transaction. */
+@Serializable
+data class SplitLine(
+    val categoryId: String? = null,
+    val amount: Long,
 )
 
 @Serializable

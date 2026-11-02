@@ -366,11 +366,12 @@ fun CategoryPicker(
     selected: String,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
+    allowTransfers: Boolean = true,
 ) {
     val create = LocalCreateCategory.current
     var newName by remember { mutableStateOf<String?>(null) }
     Picker(
-        label, categoryOptions(data, excludeAccountId), selected, onSelect, modifier,
+        label, categoryOptions(data, excludeAccountId, allowTransfers), selected, onSelect, modifier,
         createLabel = if (create != null && data.groups.isNotEmpty()) "New category" else null,
         onCreate = { newName = it },
     )

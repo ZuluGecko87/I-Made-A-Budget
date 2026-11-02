@@ -879,16 +879,21 @@ private fun ActivityDialog(
     onAdd: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // A split transaction shows with just its line(s) in this category.
     val txns = data.transactions.values
-        .filter { it.categoryId == category.id && YearMonth.of(it.date) == month && data.isOnBudget(it.accountId) }
-        .sortedWith(compareByDescending<Transaction> { it.date }.thenBy { it.id })
+        .filter { YearMonth.of(it.date) == month && data.isOnBudget(it.accountId) }
+        .mapNotNull { t ->
+            val lines = t.parts().filter { it.categoryId == category.id }
+            if (lines.isEmpty()) null else t to lines.sumOf { it.amount }
+        }
+        .sortedWith(compareByDescending<Pair<Transaction, Long>> { it.first.date }.thenBy { it.first.id })
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("${category.name} · ${month.label}") },
         text = {
             Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                 if (txns.isEmpty()) Text("No transactions in this category this month.")
-                txns.forEach { t ->
+                txns.forEach { (t, amount) ->
                     Row(
                         Modifier.fillMaxWidth().clickable { onEdit(t) }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -897,21 +902,22 @@ private fun ActivityDialog(
                         Column(Modifier.weight(1f)) {
                             Text(data.payeeLabel(t), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
-                                data.accountName(t.accountId) + if (t.memo.isNotBlank()) " · ${t.memo}" else "",
+                                data.accountName(t.accountId) + (if (t.isSplit) " · split of ${Money.format(t.amount)}" else "") +
+                                    if (t.memo.isNotBlank()) " · ${t.memo}" else "",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        Text(Money.format(t.amount), color = amountColor(t.amount))
+                        Text(Money.format(amount), color = amountColor(amount))
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                 }
                 if (txns.isNotEmpty()) {
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                         Text("Total", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                        Text(Money.format(txns.sumOf { it.amount }), fontWeight = FontWeight.SemiBold)
+                        Text(Money.format(txns.sumOf { it.second }), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

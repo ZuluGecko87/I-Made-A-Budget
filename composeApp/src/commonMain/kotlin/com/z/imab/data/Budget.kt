@@ -155,7 +155,8 @@ class Budget(
         fun putScheduled(s: ScheduledTransaction) = put(Kinds.SCHEDULED, s.id, s, ScheduledTransaction.serializer())
 
         /** Saves a transaction, keeping the other leg of a transfer and any loan principal entry in step. */
-        fun saveTxn(input: Transaction) {
+        fun saveTxn(raw: Transaction) {
+            val input = withSplitsChecked(raw)
             val before = d.transactions[input.id]
             val wasLoan = before?.loanSplit?.loanAccountId
             val from = minOf(input.date, before?.date ?: input.date)
@@ -166,6 +167,18 @@ class Budget(
                 remove(Kinds.TXN, principalLegId(input.id))
                 recalcLoan(wasLoan, from)
             }
+        }
+
+        /**
+         * A split needs at least two lines that add up to the amount; a single line is just its
+         * category. Transfers and loan payments aren't split.
+         */
+        private fun withSplitsChecked(t: Transaction): Transaction {
+            if (t.splits.isEmpty()) return t
+            if (t.transferAccountId != null || t.loanSplit != null) return t.copy(splits = emptyList())
+            if (t.splits.size == 1) return t.copy(categoryId = t.splits[0].categoryId, splits = emptyList())
+            require(t.splits.sumOf { it.amount } == t.amount) { "The split lines don't add up to the transaction amount." }
+            return t.copy(categoryId = null)
         }
 
         private fun saveTxnAndTransfer(input: Transaction) {
@@ -406,6 +419,9 @@ class Budget(
     private fun deleteCategoryIn(e: Edit, id: String) = with(e) {
         d.assignments.values.filter { it.categoryId == id }.forEach { remove(Kinds.ASSIGNMENT, it.key) }
         d.transactions.values.filter { it.categoryId == id }.forEach { putTxn(it.copy(categoryId = null)) }
+        d.transactions.values.filter { t -> t.splits.any { it.categoryId == id } }.forEach { t ->
+            putTxn(t.copy(splits = t.splits.map { if (it.categoryId == id) it.copy(categoryId = null) else it }))
+        }
         d.scheduled.values.filter { it.categoryId == id }.forEach { putScheduled(it.copy(categoryId = null)) }
         d.combinedGoals.values.filter { id in it.categoryIds }.forEach {
             put(Kinds.COMBINED_GOAL, it.id, it.copy(categoryIds = it.categoryIds - id), CombinedGoal.serializer())
@@ -506,7 +522,7 @@ class Budget(
         val entered = d.transactions[enteredId] ?: return@edit
         val bank = d.transactions[bankId] ?: return@edit
         if (entered.amount != bank.amount || entered.accountId != bank.accountId) return@edit
-        val enteredHasJob = entered.categoryId != null || entered.transferAccountId != null
+        val enteredHasJob = entered.categoryId != null || entered.transferAccountId != null || entered.isSplit
         // The bank copy goes; its transfer partner (if any) is kept as a plain transaction.
         removeTxn(bank.id, removePair = false)
         val merged = entered.copy(
@@ -514,6 +530,7 @@ class Budget(
             payee = entered.payee.ifBlank { bank.payee },
             memo = entered.memo.ifBlank { bank.memo },
             categoryId = if (enteredHasJob) entered.categoryId else bank.categoryId,
+            splits = if (enteredHasJob) entered.splits else bank.splits,
             transferAccountId = if (enteredHasJob) entered.transferAccountId else bank.transferAccountId,
             transferPairId = if (enteredHasJob) entered.transferPairId else bank.transferPairId,
             cleared = true,

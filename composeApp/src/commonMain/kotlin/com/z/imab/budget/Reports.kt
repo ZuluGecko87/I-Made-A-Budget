@@ -94,10 +94,13 @@ object Reports {
      * Ready to Assign inflows, pre-existing debt and uncategorized transactions aren't spending.
      */
     fun spending(data: BudgetData, period: ReportPeriod): SpendingReport {
-        fun spent(t: Transaction) = -t.amount
-        fun isSpending(t: Transaction) = counts(data, t) && t.categoryId != null && t.categoryId in data.categories
+        // Split transactions count once per category line.
+        fun spendingParts(t: Transaction) =
+            if (counts(data, t)) t.parts().filter { it.categoryId != null && it.categoryId in data.categories } else emptyList()
+        fun spent(t: Transaction) = -spendingParts(t).sumOf { it.amount }
+        fun isSpending(t: Transaction) = spendingParts(t).isNotEmpty()
         val inPeriod = data.transactions.values.filter { isSpending(it) && period.contains(it) }
-        val byCat = inPeriod.groupBy { it.categoryId!! }.mapValues { (_, l) -> l.sumOf(::spent) }
+        val byCat = inPeriod.flatMap(::spendingParts).groupBy { it.categoryId!! }.mapValues { (_, l) -> -l.sumOf { it.amount } }
         val rows = byCat.map { (id, amount) ->
             val c = data.categories.getValue(id)
             AmountRow(id, c.name, data.groups[c.groupId]?.name ?: "", amount)
@@ -114,19 +117,22 @@ object Reports {
     }
 
     private fun isIncome(data: BudgetData, t: Transaction) =
-        counts(data, t) && t.categoryId == READY_TO_ASSIGN && t.amount > 0 && t.payee != STARTING_BALANCE_PAYEE
+        counts(data, t) && incomeOf(t) > 0 && t.payee != STARTING_BALANCE_PAYEE
+
+    /** The part of a deposit that went to Ready to Assign (all of it, unless it's split). */
+    private fun incomeOf(t: Transaction) = if (t.amount > 0) t.parts().filter { it.categoryId == READY_TO_ASSIGN }.sumOf { it.amount } else 0L
 
     /** Income = money coming in to Ready to Assign (not starting balances). */
     fun income(data: BudgetData, period: ReportPeriod): IncomeReport {
         val inPeriod = data.transactions.values.filter { isIncome(data, it) && period.contains(it) }
         val prev = period.previous()
         val sources = inPeriod.groupBy { it.payee.ifBlank { "(no payee)" } }
-            .map { (p, l) -> AmountRow(p, p, "", l.sumOf { it.amount }) }
+            .map { (p, l) -> AmountRow(p, p, "", l.sumOf(::incomeOf)) }
             .sortedByDescending { it.amount }
         return IncomeReport(
-            total = inPeriod.sumOf { it.amount },
-            previousTotal = data.transactions.values.filter { isIncome(data, it) && prev.contains(it) }.sumOf { it.amount },
-            byMonth = period.months.map { m -> m to inPeriod.filter { YearMonth.of(it.date) == m }.sumOf { it.amount } },
+            total = inPeriod.sumOf(::incomeOf),
+            previousTotal = data.transactions.values.filter { isIncome(data, it) && prev.contains(it) }.sumOf(::incomeOf),
+            byMonth = period.months.map { m -> m to inPeriod.filter { YearMonth.of(it.date) == m }.sumOf(::incomeOf) },
             bySource = sources,
         )
     }
@@ -204,7 +210,7 @@ object Reports {
      */
     fun debtToIncome(data: BudgetData, period: ReportPeriod): DebtToIncomeReport {
         val months = period.monthCount.coerceAtLeast(1)
-        val income = data.transactions.values.filter { isIncome(data, it) && period.contains(it) }.sumOf { it.amount } / months
+        val income = data.transactions.values.filter { isIncome(data, it) && period.contains(it) }.sumOf(::incomeOf) / months
         val lines = mutableListOf<DebtLine>()
         var housing = 0L
         val debtAccounts = data.accounts.values.filter { it.type.isCredit || it.type.isLoan }.sortedBy { it.name.lowercase() }

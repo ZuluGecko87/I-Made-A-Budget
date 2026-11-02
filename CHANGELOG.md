@@ -4,6 +4,16 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.7.0 — 2026-11-02
+
+- **Split transactions:** "Split across categories" in the transaction form shares one transaction
+  between several categories. Add as many categories as you need; the amounts must add up to the
+  transaction's total before it can be saved, and "Fill in the rest" puts what's left in the last
+  line. Amounts can be calculations, like "40 + 5".
+- Each category's activity, the spending and income reports, and credit card payments count each
+  share separately. A split shows as "Split: Groceries, Household" in the account.
+- Merging with a bank import keeps your split. Deleting a category leaves its share uncategorized.
+
 ## 1.6.1 — 2026-10-31
 
 - The reminder to encrypt is optional: **Dismiss** turns it off for good, and Settings → Encryption

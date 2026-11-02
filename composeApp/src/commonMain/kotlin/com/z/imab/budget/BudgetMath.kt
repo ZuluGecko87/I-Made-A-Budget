@@ -121,17 +121,19 @@ object BudgetMath {
                 if (onCard) at(m).cardTransfers.add(t.accountId, t.amount)
                 continue
             }
-            if (onCard && t.categoryId == PREEXISTING_DEBT) continue
-            val cat = t.categoryId?.takeIf { it in data.categories }
-            when {
-                cat == null -> {
-                    at(m).toBeBudgeted += t.amount
-                    // Uncategorized card spending (or a reward credited as Ready to Assign) changes the
-                    // debt, so the payment category moves the opposite way to keep the budget balanced.
-                    if (onCard) at(m).cardUnbudgeted.add(t.accountId, t.amount)
+            for (part in t.parts()) {
+                if (onCard && part.categoryId == PREEXISTING_DEBT) continue
+                val cat = part.categoryId?.takeIf { it in data.categories }
+                when {
+                    cat == null -> {
+                        at(m).toBeBudgeted += part.amount
+                        // Uncategorized card spending (or a reward credited as Ready to Assign) changes the
+                        // debt, so the payment category moves the opposite way to keep the budget balanced.
+                        if (onCard) at(m).cardUnbudgeted.add(t.accountId, part.amount)
+                    }
+                    onCard -> at(m).credit.getOrPut(cat) { HashMap() }.add(t.accountId, part.amount)
+                    else -> at(m).cash.add(cat, part.amount)
                 }
-                onCard -> at(m).credit.getOrPut(cat) { HashMap() }.add(t.accountId, t.amount)
-                else -> at(m).cash.add(cat, t.amount)
             }
         }
 
@@ -217,10 +219,9 @@ object BudgetMath {
         val pastReturned = returnedBy.filterKeys { it < month }.values.sum()
         val income = data.transactions.values
             .filter {
-                it.categoryId == READY_TO_ASSIGN && it.amount > 0 && YearMonth.of(it.date) == month &&
-                    data.isOnBudget(it.accountId) && !data.isInternalTransfer(it)
+                it.amount > 0 && YearMonth.of(it.date) == month && data.isOnBudget(it.accountId) && !data.isInternalTransfer(it)
             }
-            .sumOf { it.amount }
+            .sumOf { t -> t.parts().filter { it.categoryId == READY_TO_ASSIGN }.sumOf { it.amount } }
 
         return MonthBudget(
             month = month,
@@ -231,7 +232,8 @@ object BudgetMath {
                 val available = categories.getValue(pid).available
                 // Starting debt not yet paid for by money assigned to the payment category.
                 val startingDebt = -(data.transactionsByAccount[card].orEmpty()
-                    .filter { it.categoryId == PREEXISTING_DEBT && YearMonth.of(it.date) <= month }.sumOf { it.amount })
+                    .filter { YearMonth.of(it.date) <= month }
+                    .sumOf { t -> t.parts().filter { it.categoryId == PREEXISTING_DEBT }.sumOf { it.amount } })
                 val assignedToCard = data.assignments.values
                     .filter { it.categoryId == pid && (runCatching { YearMonth.parse(it.month) }.getOrNull()?.let { m -> m <= month } == true) }
                     .sumOf { it.amount }

@@ -74,9 +74,10 @@ data class BudgetData(
      */
     fun needsCategory(t: Transaction): Boolean {
         if (!isOnBudget(t.accountId) || isTransfer(t) || t.loanPaymentOf != null) return false
-        val c = t.categoryId
-        if (c == PREEXISTING_DEBT && isCreditAccount(t.accountId)) return false
-        return c == null || (c != READY_TO_ASSIGN && c !in categories)
+        return t.parts().any { p ->
+            val c = p.categoryId
+            !(c == PREEXISTING_DEBT && isCreditAccount(t.accountId)) && (c == null || (c != READY_TO_ASSIGN && c !in categories))
+        }
     }
 
     /** Display name for the payee column; transfers show the other account. */
@@ -93,6 +94,7 @@ data class BudgetData(
 
     fun categoryLabel(t: Transaction): String = when {
         isTransfer(t) && (isInternalTransfer(t) || t.categoryId == null || t.categoryId == READY_TO_ASSIGN) -> "Transfer"
+        t.isSplit -> "Split: " + t.splits.joinToString(", ") { categoryName(it.categoryId) }
         !isOnBudget(t.accountId) && t.categoryId == null -> "Tracking"
         else -> categoryName(t.categoryId)
     }
