@@ -38,6 +38,9 @@ subprojects {
                     useVersion("33.7.2-jre")
                 requested.group == "com.google.protobuf" && requested.name in setOf("protobuf-java", "protobuf-kotlin") && v.startsWith("3.") ->
                     useVersion("3.25.9")
+                // Only in the classpath of Kotlin's Swift-export worker (iOS builds; not used by IMAB).
+                requested.group == "io.opentelemetry" && requested.name in setOf("opentelemetry-api", "opentelemetry-context") && v.startsWith("1.") ->
+                    useVersion("1.67.0")
             }
             if (requested.version != target.version) because("fixes known vulnerabilities (OSV / GitHub advisories)")
         }

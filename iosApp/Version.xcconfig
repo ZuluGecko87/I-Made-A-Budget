@@ -1,0 +1,4 @@
+// Kept in step with gradle.properties (imab.versionName / imab.versionCode) by
+// `./gradlew :composeApp:syncIosVersion`, which the release build runs.
+IMAB_VERSION_NAME = 1.13.0
+IMAB_VERSION_CODE = 21

@@ -1,0 +1,75 @@
+# The iPhone app. Generate IMAB.xcodeproj from this with `xcodegen` (brew install xcodegen);
+# the generated project is committed too, so building only needs Xcode.
+name: IMAB
+options:
+  bundleIdPrefix: com.z
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "$(IMAB_VERSION_NAME)"
+    CURRENT_PROJECT_VERSION: "$(IMAB_VERSION_CODE)"
+targets:
+  IMAB:
+    type: application
+    platform: iOS
+    sources:
+      - path: iosApp
+    configFiles:
+      Debug: Version.xcconfig
+      Release: Version.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.z.imab
+        PRODUCT_NAME: IMAB
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_FILE: iosApp/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        # The Kotlin framework is built by Gradle in the phase below.
+        FRAMEWORK_SEARCH_PATHS: "$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS: ["$(inherited)", "-framework", "ComposeApp"]
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        # The Kotlin framework is built for Apple Silicon simulators only (iosSimulatorArm64).
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+        SWIFT_VERSION: "5.0"
+    preBuildScripts:
+      - name: Build the Kotlin framework
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED" = "YES" ]; then exit 0; fi
+          # Xcode doesn't see the shell's JAVA_HOME; use the JDK 17 the project builds with.
+          if [ -z "$JAVA_HOME" ]; then
+            for j in /opt/homebrew/opt/openjdk@17 /usr/local/opt/openjdk@17 "$(/usr/libexec/java_home -v 17 2>/dev/null)"; do
+              [ -d "$j" ] && export JAVA_HOME="$j" && break
+            done
+          fi
+          cd "$SRCROOT/.."
+          ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
+  IMABTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: IMABTests
+    dependencies:
+      - target: IMAB
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.z.imab.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/IMAB.app/IMAB"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        FRAMEWORK_SEARCH_PATHS: "$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+        SWIFT_VERSION: "5.0"
+schemes:
+  IMAB:
+    build:
+      targets:
+        IMAB: all
+        IMABTests: [test]
+    test:
+      targets:
+        - IMABTests

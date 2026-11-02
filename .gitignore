@@ -13,3 +13,7 @@ captures/
 keystore.properties
 *.jks
 *.keystore
+
+# iPhone build output and per-user Xcode state
+iosApp/IMAB.xcodeproj/xcuserdata/
+iosApp/IMAB.xcodeproj/project.xcworkspace/xcuserdata/

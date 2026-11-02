@@ -245,6 +245,14 @@ class ScreenshotTest {
         png(File("icons/IMAB-1024.png"), 1024) {
             Canvas(Modifier.fillMaxSize().padding(100.dp)) { drawAppIcon() }
         }
+        // iPhone icons are full-bleed squares with no transparency; iOS rounds the corners itself.
+        png(File("../iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"), 1024) {
+            Canvas(Modifier.fillMaxSize()) {
+                val c = com.z.imab.ui.ArtColors.Icon
+                drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.backgroundTop, c.backgroundBottom)))
+                drawAppIcon(background = false)
+            }
+        }
         // Android masks the adaptive foreground to the middle ~66%, so keep the art inside it.
         png(File("src/androidMain/res/mipmap-xxxhdpi/ic_launcher_foreground.png"), 432) {
             Canvas(Modifier.fillMaxSize().padding(88.dp)) { drawAppIcon(background = false) }

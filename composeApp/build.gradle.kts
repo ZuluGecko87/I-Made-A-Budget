@@ -31,11 +31,35 @@ val generateBuildInfo by tasks.registering {
     }
 }
 
+/** Keeps the iPhone app's version (iosApp/Version.xcconfig) the same as gradle.properties. */
+val syncIosVersion by tasks.registering {
+    val file = rootProject.file("iosApp/Version.xcconfig")
+    val name = appVersionName
+    val code = appVersionCode
+    inputs.property("versionName", name)
+    inputs.property("versionCode", code)
+    outputs.file(file)
+    doLast {
+        val text = file.readText()
+            .replace(Regex("IMAB_VERSION_NAME = .*"), "IMAB_VERSION_NAME = $name")
+            .replace(Regex("IMAB_VERSION_CODE = .*"), "IMAB_VERSION_CODE = $code")
+        file.writeText(text)
+    }
+}
+generateBuildInfo.configure { dependsOn(syncIosVersion) }
+
 kotlin {
     androidTarget {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
     }
     jvm("desktop")
+    // iPhone: a static framework the Xcode project in iosApp/ links (see iosApp/README.md).
+    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
+        target.binaries.framework {
+            baseName = "ComposeApp"
+            isStatic = true
+        }
+    }
 
     compilerOptions {
         optIn.add("kotlin.uuid.ExperimentalUuidApi")
@@ -50,6 +74,13 @@ kotlin {
         val jvmSharedMain by creating { dependsOn(commonMain.get()) }
         androidMain.get().dependsOn(jvmSharedMain)
         desktopMain.dependsOn(jvmSharedMain)
+        // iPhone and the iPhone simulator share all their code.
+        val iosMain by creating { dependsOn(commonMain.get()) }
+        val iosTest by creating { dependsOn(commonTest.get()) }
+        listOf("iosArm64", "iosSimulatorArm64").forEach { t ->
+            getByName("${t}Main").dependsOn(iosMain)
+            getByName("${t}Test").dependsOn(iosTest)
+        }
 
         commonMain.configure { kotlin.srcDir(generateBuildInfo) }
         commonMain.dependencies {

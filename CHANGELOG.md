@@ -4,6 +4,15 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.13.0 — 2026-11-02
+
+- **iPhone and iPad:** IMAB builds for iOS from the same code (`iosApp/`, open in Xcode). It keeps
+  the budget in the app's storage, syncs through a file picked in the Files app (iCloud Drive,
+  OneDrive, Google Drive, Dropbox), imports bank files, and encrypts with the same format as the
+  other platforms (AES-GCM from CryptoKit, key in the iPhone Keychain, this device only).
+  Not downloadable yet: installing on other people's iPhones needs an Apple Developer account.
+- The shared tests also run on the iPhone simulator, plus Xcode tests for encryption and the Keychain.
+
 ## 1.12.2 — 2026-11-02
 
 - **Pie charts** show even when only one category (or income source) has money in the period, as

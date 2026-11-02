@@ -1,6 +1,6 @@
 # IMAB — I Made A Budget
 
-An envelope budgeting app that works offline, for macOS, Windows and Android. There's no bank
+An envelope budgeting app that works offline, for macOS, Windows, Android and iPhone. There's no bank
 connection: import transactions from the statement files your bank lets you download (QBO, QFX or
 OFX), or enter them by hand. Built from one Kotlin codebase (Kotlin Multiplatform + Compose
 Multiplatform).
@@ -15,6 +15,7 @@ Download the latest version from the [Releases page](https://github.com/ZuluGeck
 | Mac (M1 or newer) | `IMAB-<version>-mac-apple-silicon.dmg` | Drag IMAB to Applications. The first time, macOS can't check the app: System Settings → Privacy & Security → **Open Anyway**. |
 | Mac (Intel) | `IMAB-<version>-mac-intel.dmg` | Same as above. |
 | Windows | `IMAB-<version>-windows.msi` | If SmartScreen warns about an unknown publisher: **More info → Run anyway**. |
+| iPhone / iPad | not downloadable yet | iPhones only install apps Apple has signed, which needs an Apple Developer account. For now it's built from source with Xcode (see *Build → iPhone*). |
 
 Then set up sync (below) to share one budget between devices.
 
@@ -180,6 +181,9 @@ and pick that same file.
   upload now* (or setting the app's battery use to Unrestricted) gets it uploaded straight away.
   Some of these apps don't cut a file to its new length when it's overwritten; IMAB trims it itself,
   ignores leftovers when reading, and rewrites such a file clean.
+- **iPhone**: the Files picker shows iCloud Drive; for OneDrive, Google Drive or Dropbox tap
+  *Browse → Locations* (the service's app must be installed, and turned on under Locations → ⋯ → Edit).
+  IMAB keeps access to the file you pick, so it's only picked once.
 
 ## Starting over
 
@@ -215,6 +219,28 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 ./gradlew :composeApp:desktopTest -Pscreenshots   # also render screens to composeApp/build/screenshots
 ```
 
+### iPhone
+
+Needs Xcode (with the iOS platform: Xcode → Settings → Components). The shared Kotlin code is built
+into a framework by Gradle from inside Xcode; `iosApp/` holds the Swift app around it: the entry
+point, and the two things only Swift can reach (CryptoKit's AES-GCM and the Keychain, in
+`NativeServices.swift`).
+
+```sh
+open iosApp/IMAB.xcodeproj    # then pick a simulator or your iPhone and press Run
+./gradlew :composeApp:iosSimulatorArm64Test   # the shared tests, on the iPhone simulator
+# CryptoKit and Keychain through the shared code (the Keychain needs a signed app, hence "-"):
+xcodebuild test -project iosApp/IMAB.xcodeproj -scheme IMAB \
+  -destination 'platform=iOS Simulator,name=iPhone 17' CODE_SIGN_IDENTITY=-
+```
+
+To run it on your own iPhone without a paid developer account: Xcode → Settings → Accounts, add
+your Apple ID; in the project's *Signing & Capabilities* choose that *Personal Team*; on the phone
+turn on Settings → Privacy & Security → *Developer Mode*. An app signed this way stops opening after
+7 days and has to be run from Xcode again. `iosApp/IMAB.xcodeproj` is generated from
+`iosApp/project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`cd iosApp && xcodegen`);
+the iPhone version number follows `gradle.properties` on every Gradle build.
+
 The version is `imab.versionName` / `imab.versionCode` in `gradle.properties` (raise the code by one
 each release); it's shown at the bottom of Settings. Changes are listed in `CHANGELOG.md`.
 
@@ -248,8 +274,8 @@ The Mac and Windows installers aren't signed, which is why they show a warning t
   with AES-256-GCM: the sync file, each device's own copy, archives, and conflict copies next to the
   sync file. The key comes from the passphrase (PBKDF2-HMAC-SHA256, 600,000 rounds, random salt in
   the file); the file header is bound to the encryption so it can't be altered. Each device asks for
-  the passphrase once and keeps the key in the Mac Keychain, the Android Keystore or Windows data
-  protection (elsewhere it asks each time). **A forgotten passphrase can't be recovered** — keep it
+  the passphrase once and keeps the key in the Mac Keychain, the Android Keystore, Windows data
+  protection or the iPhone Keychain (this device only, never synced to iCloud). **A forgotten passphrase can't be recovered** — keep it
   in a password manager. A device without the key never overwrites an encrypted file. Until a passphrase is set, a reminder shows on every
   screen; *Dismiss* turns it off, and the switch under Settings → Encryption turns it back on.
 - **Account numbers**: bank files contain full account and card numbers. IMAB keeps only the bank's
@@ -279,13 +305,14 @@ and in app storage on Android.
 composeApp/src/
   commonMain/   shared code: model, budget math, OFX parser, import matcher, ledger/sync, all UI
   androidMain/  Android activity, file pickers (Storage Access Framework)
+  iosMain/      iPhone entry point, Files-app pickers, file access, PBKDF2 (CommonCrypto)
   desktopMain/  Mac and Windows entry point, file dialogs, cloud-folder file access
   commonTest/   budget, import and parser tests
   desktopTest/  two-device sync tests, screenshot renderer
+iosApp/         the Xcode project: SwiftUI app, CryptoKit + Keychain bridge, app icon
 ```
 
 ## Not built yet
 
-- Splitting one transaction across several categories.
 - CSV import.
-- iOS (in progress; building it needs Xcode).
+- iPhone downloads (they need an Apple Developer account for TestFlight or the App Store).
