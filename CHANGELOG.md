@@ -4,6 +4,11 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.12.2 — 2026-11-02
+
+- **Pie charts** show even when only one category (or income source) has money in the period, as
+  the whole ring at 100%. Before, they quietly switched to bars, which happens early in a month.
+
 ## 1.12.1 — 2026-11-02
 
 - **Reports on phones:** the ‹ Sep – Nov 2026 › range sits beside the Period menu again for Last 3

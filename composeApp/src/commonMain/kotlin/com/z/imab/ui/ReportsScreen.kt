@@ -288,13 +288,14 @@ private object PieColors {
  * Share of the total as a donut: the five largest, then the rest as "Other" (more slices can't be
  * told apart). [colorOrder] fixes each id's color, so filtering doesn't repaint what's left. The
  * legend beside it names every slice with its amount and share; tap a slice or a legend row to
- * read it in the middle. Only positive amounts are shares, so net refunds are left out.
+ * read it in the middle. Only positive amounts are shares, so net refunds are left out. A single
+ * category is drawn as the whole ring (early in a month that's often all there is).
  */
 @Composable
 private fun PieChart(rows: List<AmountRow>, colorOrder: List<String>, groupLabel: Boolean = false) {
     val positive = rows.filter { it.amount > 0 }.sortedByDescending { it.amount }
-    if (positive.size < 2) {
-        RankedBars(rows, rows.sumOf { it.amount }, groupLabel = groupLabel)
+    if (positive.isEmpty()) {
+        Text("Nothing to show as a pie: refunds outweigh spending here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
     val dark = MaterialTheme.colorScheme.background.let { it.red * 0.299f + it.green * 0.587f + it.blue * 0.114f } < 0.5f
@@ -330,8 +331,8 @@ private fun PieChart(rows: List<AmountRow>, colorOrder: List<String>, groupLabel
                 val stroke = minOf(size.width, size.height) * 0.2f
                 val d = minOf(size.width, size.height) - stroke
                 val topLeft = Offset((size.width - d) / 2f, (size.height - d) / 2f)
-                // A 2px gap of background between slices.
-                val gap = (2f / (d / 2f) * 180f / kotlin.math.PI.toFloat())
+                // A 2px gap of background between slices (none when one slice is the whole ring).
+                val gap = if (slices.size == 1) 0f else (2f / (d / 2f) * 180f / kotlin.math.PI.toFloat())
                 var start = -90f
                 slices.forEachIndexed { i, sl ->
                     val sweep = sl.amount / total * 360f

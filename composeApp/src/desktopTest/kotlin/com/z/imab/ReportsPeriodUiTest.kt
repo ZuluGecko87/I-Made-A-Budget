@@ -326,4 +326,27 @@ class ReportsPeriodUiTest {
             }
         }
     }
+
+    /** Early in a month there may be spending in only one category: the pie is that one, whole. */
+    @Test
+    fun aPieWithOneCategoryIsStillAPie() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        val now = YearMonth.of(today())
+        store.budget.saveAccount(Account("chk", "Checking"), 1000000, now.firstDay)
+        store.budget.saveTransaction(Transaction("r", "chk", now.firstDay, -150000, "Landlord", categoryId = "seed-rent-mortgage"))
+        setContent {
+            MaterialTheme(colorScheme = LightColors) {
+                Surface { Box(Modifier.width(384.dp).fillMaxHeight()) { ReportsScreen(store) } }
+            }
+        }
+        onNodeWithText("Pie").performClick()
+        waitForIdle()
+        onNodeWithText("100%").assertExists()
+        onNodeWithText("Total").assertExists()
+        if (System.getProperty("imab.screenshots") != null) {
+            val out = File("build/screenshots").apply { mkdirs() }
+            ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "reports-pie-one.png"))
+        }
+    }
 }
