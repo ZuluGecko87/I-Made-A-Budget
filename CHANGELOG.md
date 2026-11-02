@@ -4,6 +4,12 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.12.0 — 2026-11-02
+
+- **Reports:** **YTD** replaces Year: January through this month of the current year.
+- The Period menu is a fixed width on every platform and for every choice; so are Custom's From
+  and To. If the text is set large, the ‹ period › control moves under the menu.
+
 ## 1.11.1 — 2026-11-02
 
 - **Reports on phones:** the period beside the Period menu stays on one line: "Nov 2026",

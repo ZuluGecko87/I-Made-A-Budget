@@ -94,7 +94,7 @@ private enum class ReportTab(val label: String) {
 }
 
 private enum class PeriodMode(val label: String) {
-    MONTH("Month"), LAST3("Last 3 months"), YEAR("Year"), LAST12("Last 12 months"), CUSTOM("Custom"),
+    MONTH("Month"), LAST3("Last 3 months"), YTD("YTD"), LAST12("Last 12 months"), CUSTOM("Custom"),
 }
 
 @Composable
@@ -115,53 +115,61 @@ fun ReportsScreen(store: BudgetStore) {
     val period = when (mode) {
         PeriodMode.MONTH -> ReportPeriod.month(anchor)
         PeriodMode.LAST3 -> ReportPeriod.last3(anchor)
-        PeriodMode.YEAR -> ReportPeriod.year(anchor.year)
+        PeriodMode.YTD -> ReportPeriod.yearToDate(thisMonth)
         PeriodMode.LAST12 -> ReportPeriod.last12(anchor)
         PeriodMode.CUSTOM -> ReportPeriod.between(customFrom ?: start, customTo ?: thisMonth)
     }
     // Short enough to stay on one line beside the menu on a phone.
     val label = when {
         mode == PeriodMode.MONTH -> shortMonth(anchor)
-        mode == PeriodMode.YEAR -> anchor.year.toString()
+        period.from == period.to -> shortMonth(period.to)
         period.from.year == period.to.year -> "${period.from.label.take(3)} – ${shortMonth(period.to)}"
         else -> "${period.from.label.take(3)} ${period.from.year % 100} – ${period.to.label.take(3)} ${period.to.year % 100}"
     }
-    fun step(by: Int) {
-        anchor = when (mode) {
-            PeriodMode.YEAR -> anchor + 12 * by
-            else -> anchor + by
-        }
-    }
+    // Year to date is always this year's, so only the other kinds step through time.
+    val steps = mode == PeriodMode.MONTH || mode == PeriodMode.LAST3 || mode == PeriodMode.LAST12
+    fun step(by: Int) { anchor += by }
 
     Column(Modifier.fillMaxSize()) {
         Text("Reports", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp))
         PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 8.dp) {
             ReportTab.entries.forEach { t -> Tab(selected = tab == t, onClick = { tab = t }, text = { Text(t.label) }) }
         }
-        // One time control above everything it scopes: what kind of period, then which one.
-        Row(
+        // One time control above everything it scopes: what kind of period, then which one. The
+        // menus have fixed widths on every platform; if text is set large, the ‹ period › control
+        // moves under the menu rather than squeezing it.
+        FlowRow(
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            // The menu takes the room the period label doesn't need.
-            Picker("Period", PeriodMode.entries.map { PickerOption(it, it.label) }, mode, { mode = it }, Modifier.weight(1f).widthIn(max = 220.dp))
-            if (mode != PeriodMode.CUSTOM) {
-                IconButton(onClick = { step(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Earlier") }
-                Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1, softWrap = false)
-                IconButton(onClick = { step(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Later") }
+            Picker("Period", PeriodMode.entries.map { PickerOption(it, it.label) }, mode, { mode = it }, Modifier.width(PERIOD_MENU_WIDTH))
+            when {
+                steps -> Row(Modifier.align(Alignment.CenterVertically), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { step(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Earlier") }
+                    Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1, softWrap = false)
+                    IconButton(onClick = { step(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Later") }
+                }
+                mode == PeriodMode.YTD -> Text(
+                    label,
+                    Modifier.align(Alignment.CenterVertically).padding(start = 12.dp),
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
         }
         if (mode == PeriodMode.CUSTOM) {
             // Newest first, back to the month the budget started.
             val months = generateSequence(maxOf(thisMonth, period.to)) { it - 1 }.takeWhile { it >= minOf(start, period.from) }
                 .map { PickerOption(it, shortMonth(it)) }.toList()
-            Row(
+            FlowRow(
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Picker("From", months, period.from, { customFrom = it; if (it > period.to) customTo = it }, Modifier.weight(1f))
-                Picker("To", months, period.to, { customTo = it; if (it < period.from) customFrom = it }, Modifier.weight(1f))
+                Picker("From", months, period.from, { customFrom = it; if (it > period.to) customTo = it }, Modifier.width(MONTH_MENU_WIDTH))
+                Picker("To", months, period.to, { customTo = it; if (it < period.from) customFrom = it }, Modifier.width(MONTH_MENU_WIDTH))
             }
             Row(
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
@@ -170,7 +178,7 @@ fun ReportsScreen(store: BudgetStore) {
             ) {
                 Text(
                     "${period.monthCount} month${if (period.monthCount == 1) "" else "s"}",
-                    Modifier.weight(1f),
+                    Modifier.weight(1f, fill = false),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -191,6 +199,10 @@ fun ReportsScreen(store: BudgetStore) {
 }
 
 private fun shortMonth(m: YearMonth) = "${m.label.take(3)} ${m.year}"
+
+/** Fits "Last 12 months" at large text sizes; the same on every platform and for every choice. */
+private val PERIOD_MENU_WIDTH = 180.dp
+private val MONTH_MENU_WIDTH = 150.dp
 
 /** "$2,594.99" for tiles; "$2.6K" for axis labels. */
 private fun compact(cents: Long): String {

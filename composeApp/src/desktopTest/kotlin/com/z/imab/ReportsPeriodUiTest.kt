@@ -48,6 +48,7 @@ import kotlinx.coroutines.runBlocking
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /** Choosing the time a report covers, on a phone-width screen. */
@@ -242,15 +243,53 @@ class ReportsPeriodUiTest {
             val out = File("build/screenshots").apply { mkdirs() }
             ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "reports-period-narrow.png"))
         }
-        for (mode in listOf("Last 3 months", "Year", "Last 12 months")) {
+        fun menuWidth() = onNodeWithText("Period").fetchSemanticsNode().boundsInRoot.width
+        val width = menuWidth()
+        for (mode in listOf("Last 3 months", "YTD", "Last 12 months", "Custom", "Month")) {
             onNodeWithText("Period").performClick()
             waitForIdle()
             onAllNodesWithText(mode).onLast().performClick()
             waitForIdle()
-            onNodeWithContentDescription("Earlier").assertExists()
+            assertEquals(width, menuWidth(), "the menu keeps its width for $mode")
+            if (mode == "Last 12 months") {
+                onNodeWithContentDescription("Earlier").performClick()
+                waitForIdle()
+                val to = m - 1 // stepped back 12 months above, and one more here
+                val from = to - 11
+                assertOneLine("${from.label.take(3)} ${from.year % 100} – ${to.label.take(3)} ${to.year % 100}")
+            }
         }
-        val to = m
-        val from = to - 11
-        assertOneLine("${from.label.take(3)} ${from.year % 100} – ${to.label.take(3)} ${to.year % 100}")
+    }
+
+    @Test
+    fun yearToDateIsThisYearOnlyAndTheMenuIsTheSameWidthOnAWideWindow() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        setContent {
+            MaterialTheme(colorScheme = LightColors) {
+                Surface { Box(Modifier.width(1200.dp).fillMaxHeight()) { ReportsScreen(store) } }
+            }
+        }
+        val menu = onNodeWithText("Period").fetchSemanticsNode().boundsInRoot.width
+        assertEquals(with(density) { 180.dp.toPx() }, menu, 0.5f, "a fixed width, not the window's")
+
+        onNodeWithText("Period").performClick()
+        waitForIdle()
+        onAllNodesWithText("YTD").onLast().performClick()
+        waitForIdle()
+        val now = YearMonth.of(today())
+        onNodeWithText(if (now.month == 1) "Jan ${now.year}" else "Jan – ${now.label.take(3)} ${now.year}").assertExists()
+        onNodeWithContentDescription("Earlier").assertDoesNotExist()
+        onNodeWithContentDescription("Later").assertDoesNotExist()
+
+        onNodeWithText("Period").performClick()
+        waitForIdle()
+        onAllNodesWithText("Custom").onLast().performClick()
+        waitForIdle()
+        assertEquals(with(density) { 150.dp.toPx() }, onNodeWithText("From").fetchSemanticsNode().boundsInRoot.width, 0.5f)
+        if (System.getProperty("imab.screenshots") != null) {
+            val out = File("build/screenshots").apply { mkdirs() }
+            ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "reports-wide-custom.png"))
+        }
     }
 }

@@ -32,6 +32,9 @@ data class ReportPeriod(val from: YearMonth, val to: YearMonth) {
         fun last12(ending: YearMonth) = ReportPeriod(ending - 11, ending)
         fun last3(ending: YearMonth) = ReportPeriod(ending - 2, ending)
 
+        /** January of [thisMonth]'s year through [thisMonth]. */
+        fun yearToDate(thisMonth: YearMonth) = ReportPeriod(YearMonth(thisMonth.year, 1), thisMonth)
+
         /** The month the budget starts: its earliest transaction or assignment, or null if it has neither. */
         fun budgetStart(data: BudgetData): YearMonth? =
             (data.transactions.values.map { YearMonth.of(it.date) } +
