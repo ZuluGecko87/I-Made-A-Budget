@@ -1,5 +1,10 @@
 package com.z.imab
 
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.CompositionLocalProvider
 import com.z.imab.ui.DarkColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -43,6 +48,7 @@ import kotlinx.coroutines.runBlocking
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /** Choosing the time a report covers, on a phone-width screen. */
 @OptIn(ExperimentalTestApi::class)
@@ -89,7 +95,10 @@ class ReportsPeriodUiTest {
         }
         period("Last 3 months")
         val m3 = now - 2
-        onNodeWithText("${m3.label.take(3)} ${m3.year} – ${now.label.take(3)} ${now.year}").assertExists()
+        onNodeWithText(
+            if (m3.year == now.year) "${m3.label.take(3)} – ${now.label.take(3)} ${now.year}"
+            else "${m3.label.take(3)} ${m3.year % 100} – ${now.label.take(3)} ${now.year % 100}",
+        ).assertExists()
 
         // Custom starts at the month the budget started and runs to this month.
         period("Custom")
@@ -202,5 +211,46 @@ class ReportsPeriodUiTest {
         onNodeWithText("Show all").performClick()
         waitForIdle()
         onNodeWithText("All categories").assertExists()
+    }
+
+    @Test
+    fun periodLabelsStayOnOneLineOnANarrowPhoneWithLargeText() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        setContent {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale = 1.3f)) {
+                MaterialTheme(colorScheme = LightColors) {
+                    Surface { Box(Modifier.width(360.dp).fillMaxHeight()) { ReportsScreen(store) } }
+                }
+            }
+        }
+        fun assertOneLine(text: String) {
+            val h = onNodeWithText(text).fetchSemanticsNode().size.height
+            val line = with(density) { (20 * 1.3f).sp.toPx() }
+            assertTrue(h < line * 1.5f, "'$text' wraps: ${h}px tall, one line is ${line}px")
+        }
+        // Every month of the year, including the long names.
+        var m = YearMonth.of(today())
+        repeat(12) {
+            assertOneLine("${m.label.take(3)} ${m.year}")
+            onNodeWithContentDescription("Earlier").performClick()
+            waitForIdle()
+            m -= 1
+        }
+        if (System.getProperty("imab.screenshots") != null) {
+            val out = File("build/screenshots").apply { mkdirs() }
+            ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "reports-period-narrow.png"))
+        }
+        for (mode in listOf("Last 3 months", "Year", "Last 12 months")) {
+            onNodeWithText("Period").performClick()
+            waitForIdle()
+            onAllNodesWithText(mode).onLast().performClick()
+            waitForIdle()
+            onNodeWithContentDescription("Earlier").assertExists()
+        }
+        val to = m
+        val from = to - 11
+        assertOneLine("${from.label.take(3)} ${from.year % 100} – ${to.label.take(3)} ${to.year % 100}")
     }
 }

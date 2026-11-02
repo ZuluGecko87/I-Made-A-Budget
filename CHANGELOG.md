@@ -4,6 +4,12 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.11.1 — 2026-11-02
+
+- **Reports on phones:** the period beside the Period menu stays on one line: "Nov 2026",
+  "Sep – Nov 2026", or "Dec 25 – Nov 26" across years. The ‹ › buttons are smaller and the menu
+  takes the room that's left. Checked at 360dp wide with text at 130%.
+
 ## 1.11.0 — 2026-11-02
 
 - **Spending by chosen categories:** the spending report covers all categories by default; the

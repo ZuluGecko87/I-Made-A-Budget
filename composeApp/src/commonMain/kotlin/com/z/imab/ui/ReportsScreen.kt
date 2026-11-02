@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -116,10 +119,12 @@ fun ReportsScreen(store: BudgetStore) {
         PeriodMode.LAST12 -> ReportPeriod.last12(anchor)
         PeriodMode.CUSTOM -> ReportPeriod.between(customFrom ?: start, customTo ?: thisMonth)
     }
-    val label = when (mode) {
-        PeriodMode.MONTH -> anchor.label
-        PeriodMode.YEAR -> anchor.year.toString()
-        else -> "${shortMonth(period.from)} – ${shortMonth(period.to)}"
+    // Short enough to stay on one line beside the menu on a phone.
+    val label = when {
+        mode == PeriodMode.MONTH -> shortMonth(anchor)
+        mode == PeriodMode.YEAR -> anchor.year.toString()
+        period.from.year == period.to.year -> "${period.from.label.take(3)} – ${shortMonth(period.to)}"
+        else -> "${period.from.label.take(3)} ${period.from.year % 100} – ${period.to.label.take(3)} ${period.to.year % 100}"
     }
     fun step(by: Int) {
         anchor = when (mode) {
@@ -138,11 +143,12 @@ fun ReportsScreen(store: BudgetStore) {
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Picker("Period", PeriodMode.entries.map { PickerOption(it, it.label) }, mode, { mode = it }, Modifier.width(180.dp))
+            // The menu takes the room the period label doesn't need.
+            Picker("Period", PeriodMode.entries.map { PickerOption(it, it.label) }, mode, { mode = it }, Modifier.weight(1f).widthIn(max = 220.dp))
             if (mode != PeriodMode.CUSTOM) {
-                TextButton(onClick = { step(-1) }) { Text("‹") }
-                Text(label, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleSmall, maxLines = 2, textAlign = TextAlign.Center)
-                TextButton(onClick = { step(1) }) { Text("›") }
+                IconButton(onClick = { step(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Earlier") }
+                Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1, softWrap = false)
+                IconButton(onClick = { step(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Later") }
             }
         }
         if (mode == PeriodMode.CUSTOM) {
