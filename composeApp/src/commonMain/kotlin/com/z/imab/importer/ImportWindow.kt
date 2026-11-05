@@ -9,6 +9,29 @@ import kotlinx.datetime.plus
 object ImportWindow {
     const val STARTING_BALANCE_PAYEE = com.z.imab.model.STARTING_BALANCE_PAYEE
 
+    /** Date of the oldest transaction that came from a bank file, or null if the account was never imported into. */
+    fun firstImportDate(data: BudgetData, accountId: String): LocalDate? =
+        data.transactionsByAccount[accountId].orEmpty().filter { it.importId != null }.minOfOrNull { it.date }
+
+    /**
+     * The rows to review: everything from [from] on, plus anything older that an earlier import
+     * left out (skipped, or not added before the review was closed). Those are bank transactions
+     * between the first and last imported dates that aren't in the budget yet; duplicates of what
+     * was imported stay hidden.
+     */
+    fun rows(data: BudgetData, accountId: String, txns: List<OfxTransaction>, from: LocalDate): List<ImportRow> {
+        val first = firstImportDate(data, accountId)
+        val lookFrom = if (first != null && first < from) first else from
+        return ImportMatcher.analyze(txns.filter { it.date >= lookFrom }, accountId, data)
+            .mapNotNull { r ->
+                when {
+                    r.source.date >= from -> r
+                    r.kind == MatchKind.DUPLICATE -> null
+                    else -> r.copy(reason = "Left out of an earlier import · ${r.reason}")
+                }
+            }
+    }
+
     /** Date of the newest transaction that came from a bank file, or null if the account was never imported into. */
     fun lastImportDate(data: BudgetData, accountId: String): LocalDate? =
         data.transactionsByAccount[accountId].orEmpty().filter { it.importId != null }.maxOfOrNull { it.date }

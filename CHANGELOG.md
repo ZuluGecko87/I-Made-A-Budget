@@ -11,6 +11,9 @@ they were made; the builds themselves said 1.0.0.
   holds one category.
 - **Add several at once while importing:** tick rows (or the select-all box), give them one category
   with *Category for selected*, and **Add** them together. The bar stays at the top while you scroll.
+- **Nothing left behind:** a later import only checks from the last imported date, so a row skipped
+  or not added last time was never offered again. Bank transactions between the first and last
+  imported dates that aren't in the budget now show up too, marked *Left out of an earlier import*.
 - **Skip** on an import row is now a button the same size as the others; a skipped row shows
   **Include** to put it back.
 

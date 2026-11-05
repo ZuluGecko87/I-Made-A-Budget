@@ -69,7 +69,7 @@ Then set up sync (below) to share one budget between devices.
 - **Bank import** of QuickBooks `.qbo` files (`.qfx` and `.ofx` work too). On the Mac you can drag
   the file onto an account's transactions to import into that account.
   - the first import into an account asks how far back to go (the starting balance adjusts if the account was just created from the file);
-  - later imports only look from the last imported date on, unless you tick *Also check older transactions*;
+  - later imports only look from the last imported date on, unless you tick *Also check older transactions*; a transaction an earlier import left out (skipped, or never added) is still shown;
   - already-imported transactions are marked **Duplicate** and ignored (by bank id, or by same date + amount + payee), with a warning that lets you review them or import them anyway;
   - transactions you entered by hand, scheduled ones, and the other side of a transfer are **matched** within ±4 days instead of being added twice;
   - an upcoming scheduled transaction the bank already posted is matched and the schedule moves on;

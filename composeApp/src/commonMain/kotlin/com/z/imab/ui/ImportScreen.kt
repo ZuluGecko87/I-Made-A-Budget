@@ -91,7 +91,10 @@ private class StatementState(val stmt: OfxStatement) {
     var createdAccountId by mutableStateOf<String?>(null)
     val rows = mutableStateListOf<ImportRow>()
 
-    val olderCount: Int get() = stmt.transactions.count { it.date < from }
+    /** Older rows shown anyway because an earlier import left them out. */
+    val leftOutCount: Int get() = rows.count { it.source.date < from }
+
+    val olderCount: Int get() = stmt.transactions.count { it.date < from } - leftOutCount
 
     fun chooseAccount(id: String?, data: BudgetData) {
         accountId = id
@@ -146,7 +149,7 @@ private class StatementState(val stmt: OfxStatement) {
         selected.clear()
         rows.clear()
         val id = accountId ?: return
-        rows.addAll(ImportMatcher.analyze(stmt.transactions.filter { it.date >= from }, id, data))
+        rows.addAll(ImportWindow.rows(data, id, stmt.transactions, from))
     }
 
     /** Updates a row; when it will become a rule, the same choice is applied to matching rows in this file. */
@@ -489,7 +492,8 @@ private fun DateWindow(st: StatementState, lastImport: LocalDate?, budget: Budge
             }
         } else {
             Text(
-                "Last import went up to ${lastImport.short()}, so only transactions from that date on are checked.",
+                "Last import went up to ${lastImport.short()}, so only transactions from that date on are checked" +
+                    if (st.leftOutCount > 0) ", plus ${st.leftOutCount} older one(s) an earlier import left out." else ".",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
