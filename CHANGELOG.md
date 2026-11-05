@@ -9,6 +9,10 @@ they were made; the builds themselves said 1.0.0.
 - **Split while importing:** each new row in a bank file has a **Split** button, so one purchase can
   be shared between categories before it's added. Split rows don't create payee rules, since a rule
   holds one category.
+- **Add several at once while importing:** tick rows (or the select-all box), give them one category
+  with *Category for selected*, and **Add** them together. The bar stays at the top while you scroll.
+- **Skip** on an import row is now a button the same size as the others; a skipped row shows
+  **Include** to put it back.
 
 ## 1.13.0 — 2026-11-02
 

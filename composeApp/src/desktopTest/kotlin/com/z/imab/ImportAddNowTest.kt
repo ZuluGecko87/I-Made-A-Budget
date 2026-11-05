@@ -1,6 +1,7 @@
 package com.z.imab
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
@@ -139,5 +140,65 @@ class ImportAddNowTest {
         waitForIdle()
         val t = store.budget.data.transactionsByAccount["chk"].orEmpty().single { it.amount == -4512L }
         assertEquals(listOf(SplitLine("seed-groceries", -4000), SplitLine("seed-household", -512)), t.splits)
+    }
+
+    @Test
+    fun tickSeveralRowsGiveThemOneCategoryAndAddThemTogether() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        store.setEncryptionReminder(false)
+        store.budget.saveAccount(Account("chk", "Everyday Checking"), 0, LocalDate(2026, 9, 1))
+        val nav = NavState().apply { openAccount("chk") }
+        setContent { App(store, NoPickers, nav, showSplash = false) }
+        nav.importFile(PickedFile("Checking_Oct.qbo", Samples.QBO_CHECKING))
+        waitForIdle()
+
+        onNodeWithText("Select rows to add several at once").assertExists()
+        onNode(hasContentDescription("Select KROGER #123")).performClick()
+        onNode(hasContentDescription("Select ACME PAYROLL & CO")).performClick()
+        waitForIdle()
+        onNodeWithText("2 selected").assertExists()
+        onNodeWithText("2 of these have no category yet; they'll be added uncategorized.").assertExists()
+
+        onNodeWithText("Category for selected").performClick()
+        waitForIdle()
+        onAllNodes(hasSetTextAction()).onLast().performTextInput("Groceries")
+        waitForIdle()
+        onAllNodesWithText("Groceries").onLast().performClick()
+        waitForIdle()
+        onNodeWithText("2 of these have no category yet; they'll be added uncategorized.").assertDoesNotExist()
+
+        val before = store.budget.data.transactionsByAccount["chk"].orEmpty().size
+        onNodeWithText("Add 2 transactions").performClick()
+        waitForIdle()
+        val added = store.budget.data.transactionsByAccount["chk"].orEmpty()
+        assertEquals(before + 2, added.size)
+        assertTrue(added.filter { it.amount == -4512L || it.amount == 250000L }.all { it.categoryId == "seed-groceries" && it.cleared })
+        onNodeWithText("KROGER #123").assertDoesNotExist()
+        onNodeWithText("2 added already.").assertExists()
+        // The third row is still there, not ticked.
+        onNodeWithText("Select rows to add several at once").assertExists()
+    }
+
+    @Test
+    fun skipIsAButtonThatTogglesToInclude() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        store.setEncryptionReminder(false)
+        store.budget.saveAccount(Account("chk", "Everyday Checking"), 0, LocalDate(2026, 9, 1))
+        val nav = NavState().apply { openAccount("chk") }
+        setContent { App(store, NoPickers, nav, showSplash = false) }
+        nav.importFile(PickedFile("Checking_Oct.qbo", Samples.QBO_CHECKING))
+        waitForIdle()
+        val skip = onAllNodesWithText("Skip")[0]
+        val add = onAllNodesWithText("Add transaction")[0]
+        val h = skip.fetchSemanticsNode().boundsInRoot.height
+        assertEquals(add.fetchSemanticsNode().boundsInRoot.height, h, 0.5f, "Skip is the same height as Add transaction")
+        skip.performClick()
+        waitForIdle()
+        assertEquals(1, onAllNodesWithText("Include").fetchSemanticsNodes().size)
+        onAllNodesWithText("Include")[0].performClick()
+        waitForIdle()
+        onNodeWithText("Include").assertDoesNotExist()
     }
 }

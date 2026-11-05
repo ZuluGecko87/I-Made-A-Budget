@@ -1,6 +1,14 @@
 package com.z.imab.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.TriStateCheckbox
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -101,7 +109,41 @@ private class StatementState(val stmt: OfxStatement) {
         analyze(budget.data)
     }
 
+    /** Rows ticked to add together, by import id. */
+    val selected = mutableStateListOf<String>()
+
+    /** Rows that are added (not matched), so they can be ticked. */
+    val selectable: List<ImportRow> get() = rows.filter { it.kind == MatchKind.NEW || it.kind == MatchKind.DUPLICATE }
+
+    fun toggle(row: ImportRow) {
+        if (!selected.remove(row.importId)) selected += row.importId
+    }
+
+    /** Gives every ticked row the same category or transfer (and drops any split). */
+    fun setChoiceForSelected(choice: String) {
+        val transfer = Choice.transferId(choice)
+        rows.indices.filter { rows[it].importId in selected }.forEach { i ->
+            rows[i] = rows[i].copy(
+                categoryId = Choice.categoryId(choice),
+                transferAccountId = transfer,
+                loanAccountId = rows[i].loanAccountId.takeIf { transfer == null },
+                splits = emptyList(),
+            )
+        }
+    }
+
+    /** Adds the ticked rows now and takes them off the list. */
+    fun addSelected(budget: Budget) {
+        val id = accountId ?: return
+        val picked = rows.filter { it.importId in selected }
+        val r = budget.applyImport(id, stmt.accountKey, picked.map { it.copy(action = ImportAction.ADD) })
+        rows.removeAll { it.importId in selected }
+        selected.clear()
+        addedNow += r.added
+    }
+
     fun analyze(data: BudgetData) {
+        selected.clear()
         rows.clear()
         val id = accountId ?: return
         rows.addAll(ImportMatcher.analyze(stmt.transactions.filter { it.date >= from }, id, data))
@@ -133,6 +175,7 @@ private class StatementState(val stmt: OfxStatement) {
     fun applyNow(index: Int, action: ImportAction, budget: Budget) {
         val id = accountId ?: return
         val r = budget.applyImport(id, stmt.accountKey, listOf(rows[index].copy(action = action)))
+        selected.remove(rows[index].importId)
         rows.removeAt(index)
         addedNow += r.added
         matchedNow += r.matched
@@ -248,8 +291,16 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
             val visible = st.rows.withIndex().filter { (_, r) ->
                 st.showDuplicates || r.kind != MatchKind.DUPLICATE || r.action != ImportAction.SKIP
             }
+            if (st.accountId != null && st.selectable.isNotEmpty()) {
+                stickyHeader(key = "select-${st.stmt.accountKey}") { SelectionBar(st, data, store.budget) }
+            }
             itemsIndexed(visible, key = { _, iv -> "row-${st.stmt.accountKey}-${iv.value.importId}" }) { _, (index, row) ->
-                ImportRowView(row, data, st.accountId, onApply = { st.applyNow(index, it, store.budget) }) { st.updateRow(index, it) }
+                ImportRowView(
+                    row, data, st.accountId,
+                    selected = row.importId in st.selected,
+                    onSelect = { st.toggle(row) }.takeIf { row.kind == MatchKind.NEW || row.kind == MatchKind.DUPLICATE },
+                    onApply = { st.applyNow(index, it, store.budget) },
+                ) { st.updateRow(index, it) }
             }
         }
 
@@ -325,6 +376,60 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
         )
     }
 }
+
+/** Ticks rows to add several at once, with one category for all of them. Stays at the top while scrolling. */
+@Composable
+private fun SelectionBar(st: StatementState, data: BudgetData, budget: Budget) {
+    val all = st.selectable
+    val picked = st.rows.filter { it.importId in st.selected }
+    val count = picked.size
+    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = if (count > 0) 3.dp else 0.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 48.dp)) {
+                    TriStateCheckbox(
+                        when (count) { 0 -> ToggleableState.Off; all.size -> ToggleableState.On; else -> ToggleableState.Indeterminate },
+                        onClick = {
+                            if (count == all.size) st.selected.clear()
+                            else { st.selected.clear(); st.selected += all.map { it.importId } }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Select all" },
+                    )
+                    Text(if (count == 0) "Select rows to add several at once" else "$count selected", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (count > 0) {
+                    val choices = picked.map { Choice.of(it.categoryId, it.transferAccountId) }.distinct()
+                    CategoryPicker(
+                        "Category for selected", data, st.accountId,
+                        choices.singleOrNull()?.takeIf { picked.none { it.splits.isNotEmpty() } } ?: Choice.NONE,
+                        { st.setChoiceForSelected(it) },
+                        Modifier.width(240.dp),
+                    )
+                    Button(onClick = { st.addSelected(budget) }) { Text(if (count == 1) "Add 1 transaction" else "Add $count transactions") }
+                    TextButton(onClick = { st.selected.clear() }) { Text("Clear") }
+                }
+            }
+            val missing = picked.count { data.needsCategoryForImport(it, st.accountId) }
+            if (missing > 0) {
+                Text(
+                    "$missing of these ${if (missing == 1) "has" else "have"} no category yet; they'll be added uncategorized.",
+                    Modifier.padding(start = 12.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
+        }
+    }
+}
+
+/** Like [BudgetData.needsCategory], for a row that isn't a transaction yet. */
+private fun BudgetData.needsCategoryForImport(r: ImportRow, accountId: String?): Boolean =
+    isOnBudget(accountId) && r.transferAccountId == null && r.loanAccountId == null &&
+        (if (r.splits.isEmpty()) r.categoryId == null else r.splits.any { it.categoryId == null })
 
 @Composable
 private fun StatementHeader(st: StatementState, data: BudgetData, budget: Budget, onCreateAccount: () -> Unit) {
@@ -458,99 +563,117 @@ private fun KindBadge(kind: MatchKind, text: String) {
 }
 
 @Composable
-private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, onApply: (ImportAction) -> Unit, onChange: (ImportRow) -> Unit) {
+private fun ImportRowView(
+    row: ImportRow,
+    data: BudgetData,
+    accountId: String?,
+    selected: Boolean,
+    onSelect: (() -> Unit)?,
+    onApply: (ImportAction) -> Unit,
+    onChange: (ImportRow) -> Unit,
+) {
     val skip = row.action == ImportAction.SKIP
     var splitting by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).alpha(if (skip) 0.55f else 1f)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(row.source.date.short(), Modifier.width(72.dp), style = MaterialTheme.typography.bodySmall)
-            Column(Modifier.weight(1f)) {
-                Text(row.payee.ifBlank { "(no payee)" }, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
-                Text(row.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            Text(Money.format(row.source.amount), color = amountColor(row.source.amount))
+    Row(
+        Modifier.fillMaxWidth()
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f) else Color.Transparent)
+            .padding(start = 4.dp),
+    ) {
+        // Rows that are added (not matched) can be ticked to add several at once.
+        Box(Modifier.width(40.dp).padding(top = 2.dp), contentAlignment = Alignment.TopCenter) {
+            if (onSelect != null && accountId != null) Checkbox(selected, { onSelect() }, Modifier.semantics { contentDescription = "Select ${row.payee}" })
         }
-        FlowRow(
-            Modifier.padding(start = 72.dp, top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            // These buttons act now and take the row off the list; the rest wait for the Import button.
-            val match = when (row.kind) {
-                MatchKind.MATCH_EXISTING -> "Merge with what you entered"
-                MatchKind.MATCH_SCHEDULED -> "Match scheduled"
-                else -> null
-            }
-            if (match != null) {
-                // Keeps what you entered (payee, category, memo) as the one cleared transaction.
-                FilledTonalButton(onClick = { onApply(ImportAction.MATCH) }, enabled = accountId != null) { Text(match) }
-            } else {
-                FilledTonalButton(onClick = { onApply(ImportAction.ADD) }, enabled = accountId != null) { Text("Add transaction") }
-            }
-            // Skip leaves it out of the Import; clicking again puts it back.
-            val usual = if (match != null) ImportAction.MATCH else ImportAction.ADD
-            FilterChip(skip, { onChange(row.copy(action = if (skip) usual else ImportAction.SKIP)) }, label = { Text("Skip") })
-            if (match == null && row.splits.isNotEmpty()) {
-                OutlinedButton(onClick = { splitting = true }, enabled = accountId != null, modifier = Modifier.width(260.dp)) {
-                    Text("Split: " + row.splits.joinToString(", ") { data.categoryName(it.categoryId) }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f).padding(end = 16.dp, top = 6.dp, bottom = 6.dp).alpha(if (skip) 0.55f else 1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 40.dp)) {
+                Text(row.source.date.short(), Modifier.width(72.dp), style = MaterialTheme.typography.bodySmall)
+                Column(Modifier.weight(1f)) {
+                    Text(row.payee.ifBlank { "(no payee)" }, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+                    Text(row.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-            } else if (match == null) {
-                CategoryPicker(
-                    "Category",
-                    data,
-                    accountId,
-                    Choice.of(row.categoryId, row.transferAccountId),
-                    {
-                        val transfer = Choice.transferId(it)
-                        onChange(
-                            row.copy(
-                                categoryId = Choice.categoryId(it),
-                                transferAccountId = transfer,
-                                loanAccountId = row.loanAccountId.takeIf { transfer == null },
+                Text(Money.format(row.source.amount), color = amountColor(row.source.amount))
+            }
+            FlowRow(
+                Modifier.padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                // These buttons act now and take the row off the list; the rest wait for the Import button.
+                val match = when (row.kind) {
+                    MatchKind.MATCH_EXISTING -> "Merge with what you entered"
+                    MatchKind.MATCH_SCHEDULED -> "Match scheduled"
+                    else -> null
+                }
+                if (match != null) {
+                    // Keeps what you entered (payee, category, memo) as the one cleared transaction.
+                    FilledTonalButton(onClick = { onApply(ImportAction.MATCH) }, enabled = accountId != null) { Text(match) }
+                } else {
+                    FilledTonalButton(onClick = { onApply(ImportAction.ADD) }, enabled = accountId != null) { Text("Add transaction") }
+                }
+                // Skip leaves it out of the Import; clicking again puts it back.
+                val usual = if (match != null) ImportAction.MATCH else ImportAction.ADD
+                OutlinedButton(onClick = { onChange(row.copy(action = if (skip) usual else ImportAction.SKIP)) }) { Text(if (skip) "Include" else "Skip") }
+                if (match == null && row.splits.isNotEmpty()) {
+                    OutlinedButton(onClick = { splitting = true }, enabled = accountId != null, modifier = Modifier.width(240.dp)) {
+                        Text("Split: " + row.splits.joinToString(", ") { data.categoryName(it.categoryId) }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                } else if (match == null) {
+                    CategoryPicker(
+                        "Category",
+                        data,
+                        accountId,
+                        Choice.of(row.categoryId, row.transferAccountId),
+                        {
+                            val transfer = Choice.transferId(it)
+                            onChange(
+                                row.copy(
+                                    categoryId = Choice.categoryId(it),
+                                    transferAccountId = transfer,
+                                    loanAccountId = row.loanAccountId.takeIf { transfer == null },
+                                )
                             )
+                        },
+                        Modifier.width(240.dp),
+                    )
+                    val loans = data.loanAccounts.filter { it.id != accountId }
+                    if (loans.isNotEmpty() && row.source.amount < 0 && row.transferAccountId == null) {
+                        Picker(
+                            "Loan payment",
+                            listOf(PickerOption<String?>(null, "Not a loan payment")) + loans.map { PickerOption<String?>(it.id, "Payment on ${it.name}") },
+                            row.loanAccountId,
+                            { onChange(row.copy(loanAccountId = it)) },
+                            Modifier.width(240.dp),
                         )
+                    }
+                    if (row.transferAccountId == null && row.loanAccountId == null) {
+                        TextButton(onClick = { splitting = true }, enabled = accountId != null) { Text("Split") }
+                    }
+                }
+            }
+            if (splitting && accountId != null) {
+                SplitDialog(
+                    data, accountId, row.payee, row.source.amount, row.categoryId, row.splits,
+                    onSave = { category, lines ->
+                        // One category per rule, so a split row doesn't make one.
+                        onChange(row.copy(categoryId = if (lines.isEmpty()) category else null, splits = lines, makeRule = row.makeRule && lines.isEmpty()))
+                        splitting = false
                     },
-                    Modifier.width(260.dp),
+                    onDismiss = { splitting = false },
                 )
-                val loans = data.loanAccounts.filter { it.id != accountId }
-                if (loans.isNotEmpty() && row.source.amount < 0 && row.transferAccountId == null) {
-                    Picker(
-                        "Loan payment",
-                        listOf(PickerOption<String?>(null, "Not a loan payment")) + loans.map { PickerOption<String?>(it.id, "Payment on ${it.name}") },
-                        row.loanAccountId,
-                        { onChange(row.copy(loanAccountId = it)) },
-                        Modifier.width(260.dp),
+            }
+            val existingRule = RuleBook.find(data, row.payee)
+            val ruleAlreadyDoesThis = existingRule != null && existingRule.categoryId == row.categoryId &&
+                existingRule.transferAccountId == row.transferAccountId && existingRule.loanAccountId == row.loanAccountId
+            if (row.action == ImportAction.ADD && row.splits.isEmpty() && row.kind != MatchKind.MATCH_EXISTING && row.kind != MatchKind.MATCH_SCHEDULED &&
+                row.ruleMatch.isNotBlank() && !ruleAlreadyDoesThis &&
+                (row.categoryId != null || row.transferAccountId != null || row.loanAccountId != null)
+            ) {
+                Row(Modifier.padding(start = 0.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(row.makeRule, { onChange(row.copy(makeRule = it)) })
+                    Text(
+                        "Always use this for payees containing \"${row.ruleMatch}\"",
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                if (row.transferAccountId == null && row.loanAccountId == null) {
-                    TextButton(onClick = { splitting = true }, enabled = accountId != null) { Text("Split") }
-                }
-            }
-        }
-        if (splitting && accountId != null) {
-            SplitDialog(
-                data, accountId, row.payee, row.source.amount, row.categoryId, row.splits,
-                onSave = { category, lines ->
-                    // One category per rule, so a split row doesn't make one.
-                    onChange(row.copy(categoryId = if (lines.isEmpty()) category else null, splits = lines, makeRule = row.makeRule && lines.isEmpty()))
-                    splitting = false
-                },
-                onDismiss = { splitting = false },
-            )
-        }
-        val existingRule = RuleBook.find(data, row.payee)
-        val ruleAlreadyDoesThis = existingRule != null && existingRule.categoryId == row.categoryId &&
-            existingRule.transferAccountId == row.transferAccountId && existingRule.loanAccountId == row.loanAccountId
-        if (row.action == ImportAction.ADD && row.splits.isEmpty() && row.kind != MatchKind.MATCH_EXISTING && row.kind != MatchKind.MATCH_SCHEDULED &&
-            row.ruleMatch.isNotBlank() && !ruleAlreadyDoesThis &&
-            (row.categoryId != null || row.transferAccountId != null || row.loanAccountId != null)
-        ) {
-            Row(Modifier.padding(start = 60.dp), verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(row.makeRule, { onChange(row.copy(makeRule = it)) })
-                Text(
-                    "Always use this for payees containing \"${row.ruleMatch}\"",
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
         }
     }
