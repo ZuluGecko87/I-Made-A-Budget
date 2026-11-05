@@ -114,7 +114,7 @@ private class StatementState(val stmt: OfxStatement) {
         val rule = PayeeRule("", row.ruleMatch, row.categoryId, row.transferAccountId, row.loanAccountId)
         rows.indices.filter { it != index }.forEach { i ->
             val r = rows[i]
-            if (r.action == ImportAction.ADD && RuleBook.matches(rule, r.payee)) {
+            if (r.action == ImportAction.ADD && r.splits.isEmpty() && RuleBook.matches(rule, r.payee)) {
                 rows[i] = r.copy(
                     categoryId = row.categoryId,
                     transferAccountId = row.transferAccountId,
@@ -460,6 +460,7 @@ private fun KindBadge(kind: MatchKind, text: String) {
 @Composable
 private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, onApply: (ImportAction) -> Unit, onChange: (ImportRow) -> Unit) {
     val skip = row.action == ImportAction.SKIP
+    var splitting by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).alpha(if (skip) 0.55f else 1f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(row.source.date.short(), Modifier.width(72.dp), style = MaterialTheme.typography.bodySmall)
@@ -489,7 +490,11 @@ private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, 
             // Skip leaves it out of the Import; clicking again puts it back.
             val usual = if (match != null) ImportAction.MATCH else ImportAction.ADD
             FilterChip(skip, { onChange(row.copy(action = if (skip) usual else ImportAction.SKIP)) }, label = { Text("Skip") })
-            if (match == null) {
+            if (match == null && row.splits.isNotEmpty()) {
+                OutlinedButton(onClick = { splitting = true }, enabled = accountId != null, modifier = Modifier.width(260.dp)) {
+                    Text("Split: " + row.splits.joinToString(", ") { data.categoryName(it.categoryId) }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            } else if (match == null) {
                 CategoryPicker(
                     "Category",
                     data,
@@ -517,12 +522,26 @@ private fun ImportRowView(row: ImportRow, data: BudgetData, accountId: String?, 
                         Modifier.width(260.dp),
                     )
                 }
+                if (row.transferAccountId == null && row.loanAccountId == null) {
+                    TextButton(onClick = { splitting = true }, enabled = accountId != null) { Text("Split") }
+                }
             }
+        }
+        if (splitting && accountId != null) {
+            SplitDialog(
+                data, accountId, row.payee, row.source.amount, row.categoryId, row.splits,
+                onSave = { category, lines ->
+                    // One category per rule, so a split row doesn't make one.
+                    onChange(row.copy(categoryId = if (lines.isEmpty()) category else null, splits = lines, makeRule = row.makeRule && lines.isEmpty()))
+                    splitting = false
+                },
+                onDismiss = { splitting = false },
+            )
         }
         val existingRule = RuleBook.find(data, row.payee)
         val ruleAlreadyDoesThis = existingRule != null && existingRule.categoryId == row.categoryId &&
             existingRule.transferAccountId == row.transferAccountId && existingRule.loanAccountId == row.loanAccountId
-        if (row.action == ImportAction.ADD && row.kind != MatchKind.MATCH_EXISTING && row.kind != MatchKind.MATCH_SCHEDULED &&
+        if (row.action == ImportAction.ADD && row.splits.isEmpty() && row.kind != MatchKind.MATCH_EXISTING && row.kind != MatchKind.MATCH_SCHEDULED &&
             row.ruleMatch.isNotBlank() && !ruleAlreadyDoesThis &&
             (row.categoryId != null || row.transferAccountId != null || row.loanAccountId != null)
         ) {

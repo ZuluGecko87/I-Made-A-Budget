@@ -2,6 +2,7 @@ package com.z.imab.importer
 
 import com.z.imab.budget.Scheduler
 import com.z.imab.model.BudgetData
+import com.z.imab.model.SplitLine
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
@@ -27,6 +28,8 @@ data class ImportRow(
     val transferAccountId: String? = null,
     /** For ADD: treat as a payment on this loan (split into principal, interest and escrow). */
     val loanAccountId: String? = null,
+    /** For ADD: the amount shared between several categories instead of [categoryId]. */
+    val splits: List<SplitLine> = emptyList(),
     /** For ADD: save the choice above as a rule for payees containing [ruleMatch]. */
     val makeRule: Boolean = false,
     val ruleMatch: String = "",

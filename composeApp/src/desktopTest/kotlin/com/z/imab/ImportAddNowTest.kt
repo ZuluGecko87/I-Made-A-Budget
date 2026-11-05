@@ -1,12 +1,18 @@
 package com.z.imab
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import com.z.imab.data.BudgetStore
 import com.z.imab.model.Account
+import com.z.imab.model.SplitLine
 import com.z.imab.model.Transaction
 import com.z.imab.platform.PickedFile
 import com.z.imab.platform.Pickers
@@ -94,5 +100,44 @@ class ImportAddNowTest {
         assertEquals(LocalDate(2026, 10, 1), t.date)
         onNodeWithText("Merge with what you entered").assertDoesNotExist()
         onNodeWithText("1 merged or matched already.").assertExists()
+    }
+
+    @Test
+    fun splitARowBeforeAddingIt() = runComposeUiTest {
+        val store = BudgetStore(MemStorage(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        runBlocking { store.start() }
+        store.setEncryptionReminder(false)
+        store.budget.saveAccount(Account("chk", "Everyday Checking"), 0, LocalDate(2026, 9, 1))
+        val nav = NavState().apply { openAccount("chk") }
+        setContent { App(store, NoPickers, nav, showSplash = false) }
+        nav.importFile(PickedFile("Checking_Oct.qbo", Samples.QBO_CHECKING))
+        waitForIdle()
+
+        fun pick(field: String, option: String) {
+            onNodeWithText(field).performClick()
+            waitForIdle()
+            onAllNodes(hasSetTextAction()).onLast().performTextInput(option)
+            waitForIdle()
+            onAllNodesWithText(option).onLast().performClick()
+            waitForIdle()
+        }
+
+        // The Kroger charge is $45.12.
+        onAllNodesWithText("Split")[0].performClick()
+        waitForIdle()
+        onNodeWithText("Split $45.12").assertExists()
+        pick("Category 1", "Groceries")
+        onNode(hasSetTextAction() and hasText("Amount 1")).performTextReplacement("40")
+        pick("Category 2", "Household")
+        onNodeWithText("Fill in the rest").performClick()
+        waitForIdle()
+        onNodeWithText("Done").performClick()
+        waitForIdle()
+        onNodeWithText("Split: Groceries, Household").assertExists()
+
+        onAllNodesWithText("Add transaction")[0].performClick()
+        waitForIdle()
+        val t = store.budget.data.transactionsByAccount["chk"].orEmpty().single { it.amount == -4512L }
+        assertEquals(listOf(SplitLine("seed-groceries", -4000), SplitLine("seed-household", -512)), t.splits)
     }
 }

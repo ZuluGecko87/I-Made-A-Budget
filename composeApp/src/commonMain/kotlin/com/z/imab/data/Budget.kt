@@ -652,7 +652,7 @@ class Budget(
         }
         // Oldest first, so loan payments split against the right balance.
         for (row in rows.sortedBy { it.source.date }) {
-            if (row.action == ImportAction.ADD && row.makeRule && row.ruleMatch.isNotBlank()) {
+            if (row.action == ImportAction.ADD && row.makeRule && row.ruleMatch.isNotBlank() && row.splits.isEmpty()) {
                 saveRuleIn(this, row.ruleMatch, row.categoryId, row.transferAccountId, row.loanAccountId)
             }
             when (row.action) {
@@ -699,6 +699,7 @@ class Budget(
             payee = row.payee,
             memo = row.source.memo.takeIf { it != row.payee }.orEmpty(),
             categoryId = row.categoryId,
+            splits = row.splits,
             transferAccountId = row.transferAccountId.takeIf { row.loanAccountId == null },
             cleared = true,
             importId = row.importId,

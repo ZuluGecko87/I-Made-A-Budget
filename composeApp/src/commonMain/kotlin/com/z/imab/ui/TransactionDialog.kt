@@ -121,10 +121,10 @@ private class SplitForm(initial: Transaction?) {
 
 /** Category and amount for each part of a split transaction, with what's left to split. */
 @Composable
-private fun SplitLines(split: SplitForm, form: TxnForm, data: BudgetData) {
+private fun SplitLines(split: SplitForm, form: TxnForm, data: BudgetData, onUnsplit: (() -> Unit)? = null) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Split across categories", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-        TextButton(onClick = { split.stop(form) }) { Text("Unsplit") }
+        TextButton(onClick = { onUnsplit?.invoke() ?: split.stop(form) }) { Text("Unsplit") }
     }
     split.lines.forEachIndexed { i, line ->
         if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
@@ -549,4 +549,40 @@ fun paymentTemplate(data: BudgetData, cardId: String, amount: Long, id: String):
     val owed = maxOf(0, -data.balance(cardId))
     val pay = if (amount > 0) minOf(amount, owed).takeIf { it > 0 } ?: amount else owed
     return Transaction(id, from.id, today(), -pay, transferAccountId = cardId)
+}
+
+/**
+ * Splits an amount that's already fixed (a row from a bank file) across categories.
+ * Starts from [splits], or from [categoryId] holding the whole amount plus an empty line.
+ * [onSave] gets the lines, or a single category and no lines after Unsplit.
+ */
+@Composable
+fun SplitDialog(
+    data: BudgetData,
+    accountId: String,
+    payee: String,
+    amount: Long,
+    categoryId: String?,
+    splits: List<SplitLine>,
+    onSave: (categoryId: String?, splits: List<SplitLine>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val form = remember { TxnForm(accountId, today(), amount, payee, "", Choice.of(categoryId, null)) }
+    val split = remember {
+        SplitForm(Transaction("", accountId, today(), amount, splits = splits)).also { if (!it.active) it.start(form) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Split ${Money.format(abs(amount))}") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(payee.ifBlank { "(no payee)" }, style = MaterialTheme.typography.bodyMedium)
+                SplitLines(split, form, data, onUnsplit = { onSave(split.lines.firstOrNull()?.let { Choice.categoryId(it.choice) }, emptyList()) })
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = split.ready(form), onClick = { onSave(null, split.toSplits(form.outflow)) }) { Text("Done") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

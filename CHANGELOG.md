@@ -4,6 +4,12 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.13.1 — 2026-11-05
+
+- **Split while importing:** each new row in a bank file has a **Split** button, so one purchase can
+  be shared between categories before it's added. Split rows don't create payee rules, since a rule
+  holds one category.
+
 ## 1.13.0 — 2026-11-02
 
 - **iPhone and iPad:** IMAB builds for iOS from the same code (`iosApp/`, open in Xcode). It keeps
