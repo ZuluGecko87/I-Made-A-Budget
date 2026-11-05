@@ -273,7 +273,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                             )
                         }
-                        if (account?.type?.isLoan == true) LoanSummary(account, data) { editingAccount = true }
+                        if (account?.type?.isLoan == true) LoanSummary(account, data, onPlan = { nav.loanPlannerFor = accountId }) { editingAccount = true }
                         account?.lastReconciled?.let { date ->
                             val bal = account.reconciledBalance
                             Text(

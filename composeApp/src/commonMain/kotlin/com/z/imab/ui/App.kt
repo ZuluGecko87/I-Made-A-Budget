@@ -75,6 +75,9 @@ class NavState {
     var accountId by mutableStateOf<String?>(null)
     var importAccountId by mutableStateOf<String?>(null)
 
+    /** Loan account whose payoff planner is open (inside Accounts). */
+    var loanPlannerFor by mutableStateOf<String?>(null)
+
     /** A bank file dropped onto the window, waiting for the Import screen to pick it up. */
     var pendingImport by mutableStateOf<PickedFile?>(null)
 
@@ -90,11 +93,13 @@ class NavState {
     fun go(s: Screen) {
         screen = s
         accountId = null
+        loanPlannerFor = null
     }
 
     fun openAccount(id: String) {
         screen = Screen.Accounts
         accountId = id
+        loanPlannerFor = null
     }
 
     fun importInto(accountId: String?) {
@@ -269,7 +274,11 @@ private fun Screens(store: BudgetStore, pickers: Pickers, nav: NavState, wide: B
         Screen.Budget -> BudgetScreen(store, nav, wide)
         Screen.Accounts -> {
             val id = nav.accountId
-            if (id == null) AccountsScreen(store, nav) else RegisterScreen(store, nav, id, wide, pickers.supportsFileDrop)
+            when {
+                id == null -> AccountsScreen(store, nav)
+                nav.loanPlannerFor == id -> LoanPlannerScreen(store, nav, id, wide)
+                else -> RegisterScreen(store, nav, id, wide, pickers.supportsFileDrop)
+            }
         }
         Screen.Goals -> GoalsScreen(store)
         Screen.Reports -> ReportsScreen(store)

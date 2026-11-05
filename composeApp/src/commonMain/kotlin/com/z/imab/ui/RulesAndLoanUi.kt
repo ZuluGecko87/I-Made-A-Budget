@@ -15,6 +15,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -137,7 +138,7 @@ private fun RuleDialog(
 
 /** Summary at the top of a loan account: principal left, terms, last payment split, payoff estimate. */
 @Composable
-fun LoanSummary(account: Account, data: BudgetData, onEdit: () -> Unit) {
+fun LoanSummary(account: Account, data: BudgetData, onPlan: () -> Unit = {}, onEdit: () -> Unit) {
     val terms = account.loan
     Card(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -165,6 +166,9 @@ fun LoanSummary(account: Account, data: BudgetData, onEdit: () -> Unit) {
                 )
             }
             PayoffEstimate(owed, terms, lastPayment = last?.let { -it.amount })
+            if (owed > 0) {
+                OutlinedButton(onClick = onPlan) { Text("Payoff planner & schedule") }
+            }
         }
     }
 }

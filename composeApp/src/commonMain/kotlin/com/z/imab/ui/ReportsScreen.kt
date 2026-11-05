@@ -79,7 +79,7 @@ import com.z.imab.model.YearMonth
 import kotlin.math.roundToInt
 
 /** Chart colors (validated against the app's light and dark backgrounds; one series per chart). */
-private object ChartColors {
+internal object ChartColors {
     val seriesLight = Color(0xFF2A78D6)
     val seriesDark = Color(0xFF3987E5)
     val good = Color(0xFF0CA30C)
@@ -88,7 +88,7 @@ private object ChartColors {
 }
 
 @Composable
-private fun seriesColor() = if (MaterialTheme.colorScheme.background.let { it.red * 0.299f + it.green * 0.587f + it.blue * 0.114f } < 0.5f) ChartColors.seriesDark else ChartColors.seriesLight
+internal fun seriesColor() = if (MaterialTheme.colorScheme.background.let { it.red * 0.299f + it.green * 0.587f + it.blue * 0.114f } < 0.5f) ChartColors.seriesDark else ChartColors.seriesLight
 
 private enum class ReportTab(val label: String) {
     SPENDING("Spending"), INCOME("Income"), NET_WORTH("Net worth"), RECURRING("Recurring payments"), DTI("Debt to income"),
@@ -212,7 +212,7 @@ private val PERIOD_MENU_WIDTH = 156.dp
 private val MONTH_MENU_WIDTH = 150.dp
 
 /** "$2,594.99" for tiles; "$2.6K" for axis labels. */
-private fun compact(cents: Long): String {
+internal fun compact(cents: Long): String {
     if (cents < 0) return "-" + compact(-cents)
     val dollars = cents / 100.0
     return when {
@@ -226,7 +226,7 @@ private fun compact(cents: Long): String {
 
 /** Stat tile: label, value, optional change vs the previous period (colored by whether up is good). */
 @Composable
-private fun StatTile(
+internal fun StatTile(
     label: String,
     value: String,
     delta: Long? = null,
@@ -257,7 +257,7 @@ private fun StatTile(
 }
 
 @Composable
-private fun ChartTitle(title: String, subtitle: String? = null) {
+internal fun ChartTitle(title: String, subtitle: String? = null) {
     Column {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -278,7 +278,7 @@ private fun DrawScope.hBar(width: Float, color: Color) {
 }
 
 /** Pie slice colors: the first five of the validated categorical order, then a neutral "Other". */
-private object PieColors {
+internal object PieColors {
     val light = listOf(Color(0xFF2A78D6), Color(0xFFEB6834), Color(0xFF1BAF7A), Color(0xFFEDA100), Color(0xFFE87BA4))
     val dark = listOf(Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500), Color(0xFFD55181))
     const val SLICES = 5

@@ -4,6 +4,14 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.14.0 — 2026-11-05
+
+- **Payoff planner & schedule** for loans and mortgages: the amortization schedule (by year or by
+  month) from the loan's details, compared with extra payments you try out: more principal each
+  month, from now or a later month, a yearly extra, and lump sums. Tiles show the payoff date,
+  interest and total still to pay, and what the extras save; charts show the balance over time on
+  both schedules, and principal, interest and escrow each year, starting with payments already made.
+
 ## 1.13.1 — 2026-11-05
 
 - **Split while importing:** each new row in a bank file has a **Split** button, so one purchase can

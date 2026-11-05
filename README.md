@@ -122,6 +122,15 @@ whenever one is added, edited or removed; changed loan terms apply from the curr
 loan screen shows principal left, principal and interest paid so far, the last payment's split, and
 an estimated payoff date with the interest still to pay. Set *Extra toward principal each month* to compare payoff with and without the extra — how much sooner, and how much interest it saves.
 
+**Payoff planner & schedule** (on the loan screen) works out the month-by-month amortization from
+what's owed, the rate, escrow and the usual payment, and lets you try extra payments without
+changing the budget: more principal each month (now or from a later month), an extra once a year,
+and any number of lump sums. It shows the payoff date, interest and total still to pay, what the
+extras save, a chart of the balance on the regular schedule against the one with extras, a chart
+of principal, interest and escrow each year (payments already made, then the schedule), and the
+schedule as a table by year or by month. *Make the monthly extra my plan* saves the monthly extra
+on the loan.
+
 ## Credit cards
 
 Credit card and line-of-credit accounts on the budget each get a payment category, shown in the
