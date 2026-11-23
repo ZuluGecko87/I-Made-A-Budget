@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		075FDE88890E48CA6CB8FB53 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C86D23774C2B018E4A63250A /* iOSApp.swift */; };
 		10810374D4F932A263567090 /* NativeServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AEC6D2F27DACC1D107ACEDC /* NativeServices.swift */; };
+		5A6FDA2ED79507F9C9284745 /* ReceiptCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6596FA954F92F08A7D63574 /* ReceiptCapture.swift */; };
 		610BAB6DC9AFA163FDFED36C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6D09C82D42FB92366C7A9558 /* Assets.xcassets */; };
 		748A4236714BA46B04EF5FF7 /* NativeServicesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49023E883E31411326EE5E83 /* NativeServicesTests.swift */; };
 /* End PBXBuildFile section */
@@ -30,8 +31,9 @@
 		6BAD245C3F09BDDE0DEF6A0C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		6D09C82D42FB92366C7A9558 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B95FA3313635F1F2D5A83F2B /* IMAB.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IMAB.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C6596FA954F92F08A7D63574 /* ReceiptCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptCapture.swift; sourceTree = "<group>"; };
 		C86D23774C2B018E4A63250A /* iOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
-		"TEMP_A0A1E319-58F3-4F33-BC31-438B493AC518" /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+		"TEMP_C5BE0792-30C0-4D2C-9E2C-A741C64A6F82" /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -68,14 +70,15 @@
 				6BAD245C3F09BDDE0DEF6A0C /* Info.plist */,
 				C86D23774C2B018E4A63250A /* iOSApp.swift */,
 				5AEC6D2F27DACC1D107ACEDC /* NativeServices.swift */,
+				C6596FA954F92F08A7D63574 /* ReceiptCapture.swift */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
 		};
-		"TEMP_020F77C3-8F0A-4B4B-A260-E25F7DBA5E79" /* iosApp */ = {
+		"TEMP_FB95A03C-B9DB-4BB1-8206-C263A3AF8990" /* iosApp */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_A0A1E319-58F3-4F33-BC31-438B493AC518" /* Version.xcconfig */,
+				"TEMP_C5BE0792-30C0-4D2C-9E2C-A741C64A6F82" /* Version.xcconfig */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -201,6 +204,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				10810374D4F932A263567090 /* NativeServices.swift in Sources */,
+				5A6FDA2ED79507F9C9284745 /* ReceiptCapture.swift in Sources */,
 				075FDE88890E48CA6CB8FB53 /* iOSApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -218,7 +222,7 @@
 /* Begin XCBuildConfiguration section */
 		01190112F9C51449F7BC66B1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_A0A1E319-58F3-4F33-BC31-438B493AC518" /* Version.xcconfig */;
+			baseConfigurationReference = "TEMP_C5BE0792-30C0-4D2C-9E2C-A741C64A6F82" /* Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -247,7 +251,7 @@
 		};
 		04F5F44FCF796153804C747B /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_A0A1E319-58F3-4F33-BC31-438B493AC518" /* Version.xcconfig */;
+			baseConfigurationReference = "TEMP_C5BE0792-30C0-4D2C-9E2C-A741C64A6F82" /* Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";

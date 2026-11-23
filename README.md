@@ -81,6 +81,37 @@ Then set up sync (below) to share one budget between devices.
   - the bank account is remembered, so the next file from it goes to the right account.
 - **Sync** through OneDrive, Google Drive or Dropbox.
 
+## Receipts and work expenses
+
+**Scan receipt** (on the Budget screen, inside an account, and on Work expenses) takes a photo of a
+receipt (or picks one from Photos, or an image file on a computer), reads it **on the device** and
+opens a new transaction with what it found filled in, the photo attached:
+
+- **merchant**: matched to a payee you already use when it can be ("TRADER JOE'S #552" → *Trader
+  Joe's*), with that payee's category (from an auto-categorize rule, or the one it had last time);
+- **total**: the grand total / amount due (after the tip when there is one), not the subtotal or tax;
+- **date**: the purchase date; a "return by" date in the future is ignored. Today if none is found;
+- **card**: the last 4 digits and brand pick the account it pays from: an account whose bank file
+  had those digits, one with them in its name, or the only card of that brand. Otherwise pick the
+  account once and it's remembered for that card.
+
+Everything is a best guess to check against the photo before saving. Text is read with Apple's
+Vision on iPhone, iPad and Mac (on iPhone the document camera also finds and flattens the receipt),
+ML Kit on Android (bundled, so it works offline and without Google Play services), and Tesseract on
+Windows if it's installed (otherwise you type the details beside the photo). Nothing is uploaded.
+
+Any transaction's form can **attach**, **replace** or **remove** a receipt photo and tick **Work
+expense**. Photos are kept in the app storage of the device that took them, scaled to 1600 px and
+encrypted when the budget has a passphrase; they aren't put in the sync file (it would grow by
+hundreds of KB per receipt on every device), so another device shows "The receipt photo is on
+*iPhone*". Merging with the bank's copy of the transaction later keeps the photo and the work flag.
+
+**Reports → Work expenses** lists work expenses *to submit* (and those already submitted). Tick the
+ones to claim and **Export PDF**: a summary table (date, merchant, category, card, memo, amount,
+total) and then each receipt on its own page, with your name and a title. On a phone it opens the
+share sheet (email, Drive, Files…), on a computer a save dialog. **Export CSV** is the same list for
+a spreadsheet or expense system. Afterwards, **Mark submitted** moves them off the list.
+
 ## Reconciling
 
 **Reconcile** on an account: enter the statement date and the balance the bank shows (for cards
@@ -291,8 +322,10 @@ The Mac and Windows installers aren't signed, which is why they show a warning t
   screen; *Dismiss* turns it off, and the switch under Settings → Encryption turns it back on.
 - **Account numbers**: bank files contain full account and card numbers. IMAB keeps only the bank's
   id and the last 4 digits (e.g. `bank-123456789-••1234`, `card-••1234`) to recognize the account.
-- IMAB uses no network itself: the budget is a file your cloud app syncs. It asks for no Android
-  permissions, and on Android the budget is kept out of cloud backup.
+- IMAB uses no network itself: the budget is a file your cloud app syncs. Receipt text is read on
+  the device. It asks for no Android permissions (photos are taken by the camera app and picked with
+  the system photo picker), and on Android the budget is kept out of cloud backup. On iPhone it asks
+  for the camera when you first scan a receipt.
 - Check every dependency (the app's and the build tools') against the OSV vulnerability database:
 
   ```sh
@@ -315,12 +348,16 @@ and in app storage on Android.
 ```
 composeApp/src/
   commonMain/   shared code: model, budget math, OFX parser, import matcher, ledger/sync, all UI
-  androidMain/  Android activity, file pickers (Storage Access Framework)
+                (styled after iOS on every platform: ui/IosStyle.kt),
+                receipt reader and expense report PDF/CSV (receipt/)
+  androidMain/  Android activity, file pickers (Storage Access Framework), camera + ML Kit
   iosMain/      iPhone entry point, Files-app pickers, file access, PBKDF2 (CommonCrypto)
-  desktopMain/  Mac and Windows entry point, file dialogs, cloud-folder file access
+  desktopMain/  Mac and Windows entry point, file dialogs, cloud-folder file access, receipt
+                images and text recognition (Vision via osascript, or Tesseract)
   commonTest/   budget, import and parser tests
   desktopTest/  two-device sync tests, screenshot renderer
-iosApp/         the Xcode project: SwiftUI app, CryptoKit + Keychain bridge, app icon
+iosApp/         the Xcode project: SwiftUI app, CryptoKit + Keychain bridge, receipt camera /
+                Photos / Vision / share sheet (ReceiptCapture.swift), app icon
 ```
 
 ## Not built yet

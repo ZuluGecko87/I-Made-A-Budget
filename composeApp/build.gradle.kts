@@ -99,6 +99,9 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.kotlinx.coroutines.android)
+            // Reads receipt photos on the phone; the model is bundled, so it works offline and
+            // without Google Play services.
+            implementation(libs.mlkit.text.recognition)
         }
         desktopMain.dependencies {
             implementation(compose.desktop.currentOs)

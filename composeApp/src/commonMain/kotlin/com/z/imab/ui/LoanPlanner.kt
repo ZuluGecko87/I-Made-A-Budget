@@ -23,12 +23,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -159,10 +157,10 @@ fun LoanPlannerScreen(store: BudgetStore, nav: NavState, accountId: String, wide
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                BackLink(account.name) { nav.openAccount(accountId) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { nav.openAccount(accountId) }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                     Column {
-                        Text("Payoff planner", style = MaterialTheme.typography.headlineSmall)
+                        Text("Payoff planner", style = MaterialTheme.typography.headlineMedium)
                         Text(account.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -203,8 +201,8 @@ fun LoanPlannerScreen(store: BudgetStore, nav: NavState, accountId: String, wide
                         ChartTitle("Where the money goes", "Principal, interest and escrow each year: paid so far, then the schedule")
                         if (comparing) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilterChip(!breakdownBase, { breakdownBase = false }, label = { Text("With extras") })
-                                FilterChip(breakdownBase, { breakdownBase = true }, label = { Text("Regular") })
+                                ChoiceChip(!breakdownBase, { breakdownBase = false }, label = { Text("With extras") })
+                                ChoiceChip(breakdownBase, { breakdownBase = true }, label = { Text("Regular") })
                             }
                         }
                         BreakdownChart(paidSoFar(account, data, basis.start), shown!!)
@@ -215,8 +213,8 @@ fun LoanPlannerScreen(store: BudgetStore, nav: NavState, accountId: String, wide
                         if (comparing && !breakdownBase) "Schedule with extra payments" else "Regular schedule",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
                     )
-                    FilterChip(tableMode == TableMode.YEARLY, { tableMode = TableMode.YEARLY }, label = { Text("By year") })
-                    FilterChip(tableMode == TableMode.MONTHLY, { tableMode = TableMode.MONTHLY }, label = { Text("By month") })
+                    ChoiceChip(tableMode == TableMode.YEARLY, { tableMode = TableMode.YEARLY }, label = { Text("By year") })
+                    ChoiceChip(tableMode == TableMode.MONTHLY, { tableMode = TableMode.MONTHLY }, label = { Text("By month") })
                 }
                 ScheduleHeader(wide)
             }
@@ -309,7 +307,7 @@ private fun PlanInputs(
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OutlinedButton(onClick = { lumps += LumpForm(lumps.lastOrNull()?.month?.plus(12) ?: basis.start, "") }) { Text("+ Add lump sum") }
+                TintedButton(onClick = { lumps += LumpForm(lumps.lastOrNull()?.month?.plus(12) ?: basis.start, "") }) { Text("+ Add lump sum") }
                 TextButton(onClick = onReset) { Text("Clear") }
                 if (onSave != null && valid) {
                     TextButton(onClick = onSave) {

@@ -1,5 +1,7 @@
 package com.z.imab.platform
 
+import com.z.imab.receipt.OcrLine
+
 /** A sync file the user picked (a path on Mac, a content:// URI on Android). */
 data class SyncLocation(val id: String, val displayName: String)
 
@@ -12,6 +14,9 @@ interface Storage {
     suspend fun readLocal(name: String): String?
 
     suspend fun writeLocal(name: String, text: String)
+
+    /** Removes a file from app storage (a receipt photo that's no longer needed). */
+    suspend fun deleteLocal(name: String) {}
 
     /** Re-opens a sync location saved in settings, or null if it's no longer accessible. */
     fun restoreSyncLocation(id: String, displayName: String): SyncLocation? = SyncLocation(id, displayName)
@@ -87,4 +92,28 @@ interface Pickers {
 
     /** Lets the user choose an archived budget file to restore. */
     suspend fun pickArchive(): PickedFile?
+
+    /** Whether this device has a camera to photograph receipts with. */
+    val canTakePhoto: Boolean get() = false
+
+    /**
+     * Photographs a receipt with the camera. Returns it as a JPEG, scaled down to keep, or null if
+     * cancelled.
+     */
+    suspend fun takeReceiptPhoto(): ByteArray? = null
+
+    /** Lets the user choose a receipt photo or image file; a JPEG, scaled down to keep, or null if cancelled. */
+    suspend fun pickReceiptPhoto(): ByteArray? = null
+
+    /**
+     * Reads the text in a receipt photo, on the device (nothing is sent anywhere). Null where text
+     * recognition isn't available; then the details are typed in.
+     */
+    suspend fun readText(jpeg: ByteArray): List<OcrLine>? = null
+
+    /**
+     * Hands a file over: the share sheet on a phone (email, Files, Drive…), a save dialog on a
+     * computer. Returns a short description of where it went, or null if cancelled.
+     */
+    suspend fun shareFile(name: String, bytes: ByteArray, mimeType: String): String? = null
 }

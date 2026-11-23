@@ -48,6 +48,8 @@ import platform.UniformTypeIdentifiers.UTTypeItem
 import platform.UniformTypeIdentifiers.UTTypeJSON
 import platform.darwin.NSObject
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import com.z.imab.receipt.OcrLine
 
 /**
  * Budget files on iPhone. The budget itself lives in the app's own storage; the sync file is one
@@ -72,6 +74,11 @@ class IosStorage : Storage {
 
     override suspend fun writeLocal(name: String, text: String): Unit = withContext(Dispatchers.IO) {
         check(text.encodeToByteArray().toNSData().writeToURL(localUrl(name), atomically = true)) { "Couldn't save $name." }
+    }
+
+    override suspend fun deleteLocal(name: String): Unit = withContext(Dispatchers.IO) {
+        NSFileManager.defaultManager.removeItemAtPath("$dir/$name", null)
+        Unit
     }
 
     override suspend fun listLocal(prefix: String): List<String> = withContext(Dispatchers.IO) {
@@ -218,6 +225,33 @@ class IosPickers(private val host: () -> UIViewController?) : Pickers {
         val url = pick { UIDocumentPickerViewController(forExportingURLs = listOf(temp), asCopy = false) } ?: return null
         val id = bookmark(url) ?: return null
         return SyncLocation(id, url.lastPathComponent ?: "IMAB-budget.json")
+    }
+
+    override val canTakePhoto: Boolean get() = Native.services.hasCamera()
+
+    override suspend fun takeReceiptPhoto(): ByteArray? = captureReceipt(camera = true)
+
+    override suspend fun pickReceiptPhoto(): ByteArray? = captureReceipt(camera = false)
+
+    private suspend fun captureReceipt(camera: Boolean): ByteArray? = suspendCancellableCoroutine { cont ->
+        Native.services.captureReceipt(camera) { data, error ->
+            if (cont.isActive) {
+                if (error != null) cont.resumeWithException(IllegalStateException(error)) else cont.resume(data?.toByteArray())
+            }
+        }
+    }
+
+    override suspend fun readText(jpeg: ByteArray): List<OcrLine>? = suspendCancellableCoroutine { cont ->
+        Native.services.recognizeText(jpeg.toNSData()) { text -> if (cont.isActive) cont.resume(text?.let(OcrLine::parseTabbed)) }
+    }
+
+    override suspend fun shareFile(name: String, bytes: ByteArray, mimeType: String): String? {
+        val path = NSTemporaryDirectory() + name.replace('/', '-')
+        withContext(Dispatchers.IO) {
+            check(bytes.toNSData().writeToURL(NSURL.fileURLWithPath(path), atomically = true)) { "Couldn't write $name." }
+        }
+        val sent = suspendCancellableCoroutine { cont -> Native.services.shareFile(path) { ok -> if (cont.isActive) cont.resume(ok) } }
+        return if (sent) "Shared “$name”" else null
     }
 
     override suspend fun saveFile(suggestedName: String, text: String): String? {

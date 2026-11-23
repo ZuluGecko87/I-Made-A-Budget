@@ -1,5 +1,9 @@
 package com.z.imab.ui
 
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,24 +45,27 @@ fun ScheduledScreen(store: BudgetStore, wide: Boolean) {
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Scheduled", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                Button(onClick = { adding = true }, enabled = data.accounts.isNotEmpty()) {
-                    Icon(Icons.Default.Add, null)
-                    Text("Schedule")
+            LargeTitle("Scheduled") {
+                IconButton(onClick = { adding = true }, enabled = data.accounts.isNotEmpty()) {
+                    Icon(Icons.Default.Add, "Schedule a transaction", tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
         if (list.isEmpty()) {
             item {
-                Text(
-                    "Schedule bills, paychecks and recurring transfers. Each one is added to its account on its date, " +
-                        "and matched to the bank's copy when you import a statement.",
-                    Modifier.padding(16.dp),
-                )
+                Group(Modifier.padding(top = 8.dp)) {
+                    Text(
+                        "Schedule bills, paychecks and recurring transfers. Each one is added to its account on its date, " +
+                            "and matched to the bank's copy when you import a statement.",
+                        Modifier.padding(16.dp),
+                    )
+                    RowSeparator()
+                    TextButton(onClick = { adding = true }, enabled = data.accounts.isNotEmpty(), modifier = Modifier.padding(horizontal = 4.dp)) { Text("Schedule a transaction") }
+                }
             }
         }
-        items(list, key = { it.id }) { s ->
+        itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
+          Column(Modifier.groupRow(first = i == 0, last = i == list.lastIndex)) {
             Row(
                 Modifier.fillMaxWidth().clickable { editing = s }.padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -83,8 +90,10 @@ fun ScheduledScreen(store: BudgetStore, wide: Boolean) {
                     TextButton(onClick = { store.budget.enterScheduledNow(s.id) }) { Text("Enter now") }
                 }
             }
-            HorizontalDivider()
+            if (i < list.lastIndex) RowSeparator()
+          }
         }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 
     if (adding || editing != null) {

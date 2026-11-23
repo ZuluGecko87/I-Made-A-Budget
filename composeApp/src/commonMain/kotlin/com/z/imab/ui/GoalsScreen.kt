@@ -1,5 +1,6 @@
 package com.z.imab.ui
 
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,8 +23,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -69,18 +68,34 @@ fun GoalsScreen(store: BudgetStore) {
     val stillNeeded = board.needs().sumOf { maxOf(0, it.wanted - it.assigned) }
     val free = BudgetMath.freeToAssign(data, month, YearMonth.of(today()))
 
+    /** A category goal, with a button that assigns just what it still needs this month from Ready to Assign. */
+    val CategoryGoalRow: @Composable (Category) -> Unit = { c ->
+        val s = board.status(c)!!
+        val cm = board.current.category(c.id)
+        val toMeet = s.shortfall(cm.assigned)
+        val give = minOf(toMeet, free)
+        GoalRow(
+            c.name, s, cm,
+            assign = if (give > 0) {
+                (if (give < toMeet) "Assign ${Money.format(give)} (all that's left)" else "Assign ${Money.format(give)} to meet it") to {
+                    store.budget.setAssigned(month, c.id, cm.assigned + give)
+                }
+            } else null,
+        ) { editingCategory = c }
+    }
+
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Goals", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    Text("Goals", style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
                     TextButton(onClick = { month -= 1 }) { Text("‹") }
                     Text(month.label, style = MaterialTheme.typography.titleSmall)
                     TextButton(onClick = { month += 1 }) { Text("›") }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { pickingCategory = true }) { Icon(Icons.Default.Add, null); Text("Goal for a category") }
-                    OutlinedButton(onClick = { addingCombined = true }) { Icon(Icons.Default.Add, null); Text("Goal across categories") }
+                    TintedButton(onClick = { addingCombined = true }) { Icon(Icons.Default.Add, null); Text("Goal across categories") }
                 }
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -105,10 +120,10 @@ fun GoalsScreen(store: BudgetStore) {
             }
         }
         goalSection("Monthly spending", "Money to have each month, like rent or groceries.", monthly) { c ->
-            GoalRow(c.name, board.status(c)!!, board.current.category(c.id)) { editingCategory = c }
+            CategoryGoalRow(c)
         }
         goalSection("Savings", "Saving up toward a total; money rolls over until you use it.", savings) { c ->
-            GoalRow(c.name, board.status(c)!!, board.current.category(c.id)) { editingCategory = c }
+            CategoryGoalRow(c)
         }
         goalSection("Across categories", "One target for the money in several categories together.", combined) { g ->
             val s = board.status(g)
@@ -152,24 +167,28 @@ private fun <T> androidx.compose.foundation.lazy.LazyListScope.goalSection(
     row: @Composable (T) -> Unit,
 ) {
     if (list.isEmpty()) return
-    item(key = "h-$title") {
-        Column {
-            SectionHeader(title)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+    item(key = "h-$title") { GroupHeader(title) }
+    itemsIndexed(list) { i, item ->
+        Column(Modifier.groupRow(first = i == 0, last = i == list.lastIndex)) {
+            row(item)
+            if (i < list.lastIndex) RowSeparator()
         }
     }
-    items(list) { row(it) }
+    item(key = "f-$title") { GroupFooter(description) }
 }
 
 @Composable
-private fun GoalRow(name: String, status: GoalStatus, month: com.z.imab.budget.CategoryMonth, subtitle: String? = null, onClick: () -> Unit) {
+private fun GoalRow(
+    name: String,
+    status: GoalStatus,
+    month: com.z.imab.budget.CategoryMonth,
+    subtitle: String? = null,
+    /** Label and action of a button that assigns what the goal still needs, if it needs any. */
+    assign: Pair<String, () -> Unit>? = null,
+    onClick: () -> Unit,
+) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
@@ -178,10 +197,12 @@ private fun GoalRow(name: String, status: GoalStatus, month: com.z.imab.budget.C
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             GoalProgress(status, wide = false)
+            assign?.let { (label, action) ->
+                TintedButton(onClick = action, modifier = Modifier.padding(top = 6.dp)) { Text(label) }
+            }
         }
         AvailablePill(month.available, creditOverspending = month.creditOverspent > 0 && month.cashOverspent == 0L)
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
 
 /** Choose a category to give a goal to (categories that already have one are marked). */
@@ -238,7 +259,7 @@ private fun CombinedGoalDialog(
         title = { Text(if (initial == null) "Goal across categories" else "Edit goal") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Goal name, e.g. House") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                InputField(name, { name = it }, label = { Text("Goal name, e.g. House") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 MoneyField("Target amount", targetText, { targetText = it }, Modifier.fillMaxWidth(), isError = targetText.isNotBlank() && target == null)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(hasDate, { hasDate = it })

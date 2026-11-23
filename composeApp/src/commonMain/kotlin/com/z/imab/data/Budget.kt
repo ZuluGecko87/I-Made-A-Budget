@@ -538,6 +538,9 @@ class Budget(
             importId = bank.importId,
             reconciled = entered.reconciled || bank.reconciled,
             loanSplit = entered.loanSplit ?: bank.loanSplit.takeIf { !enteredHasJob },
+            receipt = entered.receipt ?: bank.receipt,
+            workExpense = entered.workExpense || bank.workExpense,
+            expenseSubmitted = entered.expenseSubmitted ?: bank.expenseSubmitted,
         )
         saveTxn(merged)
     }
@@ -576,8 +579,32 @@ class Budget(
                 importId = bank?.importId,
                 otherImportIds = importIds - listOfNotNull(bank?.importId).toSet(),
                 notDuplicateOf = (keep.notDuplicateOf + others.flatMap { it.notDuplicateOf }).distinct() - others.map { it.id }.toSet(),
+                receipt = keep.receipt ?: others.firstNotNullOfOrNull { it.receipt },
+                workExpense = keep.workExpense || others.any { it.workExpense },
+                expenseSubmitted = keep.expenseSubmitted ?: others.firstNotNullOfOrNull { it.expenseSubmitted },
             )
         )
+    }
+
+    /**
+     * Remembers that the card ending [last4] pays from [accountId] (from a scanned receipt), so the
+     * next receipt paid with it picks that account. A card belongs to one account.
+     */
+    fun rememberCard(accountId: String, last4: String) = edit {
+        if (last4.length != 4 || !last4.all { it.isDigit() }) return@edit
+        for (a in d.accounts.values) {
+            val has = last4 in a.cardLast4
+            if (a.id == accountId && !has) put(Kinds.ACCOUNT, a.id, a.copy(cardLast4 = a.cardLast4 + last4), Account.serializer())
+            if (a.id != accountId && has) put(Kinds.ACCOUNT, a.id, a.copy(cardLast4 = a.cardLast4 - last4), Account.serializer())
+        }
+    }
+
+    /** Marks work expenses as sent in for reimbursement on [date], or not sent yet (null). */
+    fun markSubmitted(ids: Collection<String>, date: LocalDate?) = edit {
+        for (id in ids) {
+            val t = d.transactions[id] ?: continue
+            if (t.expenseSubmitted != date) putTxn(t.copy(expenseSubmitted = date))
+        }
     }
 
     /** Remembers that two transactions are separate, so they're no longer offered for merging. */

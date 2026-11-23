@@ -22,6 +22,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>IMAB uses the camera to photograph receipts. The photo and its text stay on this device.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

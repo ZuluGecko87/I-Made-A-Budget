@@ -4,6 +4,32 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
+## 1.15.0 — 2026-11-23
+
+- **Scan receipt:** photograph a receipt (or choose a photo or image file) and IMAB reads the
+  merchant, total, date and card on the device, then opens a new transaction with them filled in
+  and the photo attached. The merchant is matched to your payees and their category; the card's
+  last 4 digits pick the account it pays from, and an account you pick for a new card is remembered.
+  Text recognition: Vision on iPhone, iPad and Mac (the document camera on iPhone), ML Kit on
+  Android, Tesseract on Windows when installed.
+- **Receipts on any transaction:** attach, view, replace or remove the photo in the form. Photos stay
+  on the device that took them (encrypted with the budget's passphrase), not in the sync file.
+- **Work expenses:** tick *Work expense* on a transaction, then **Reports → Work expenses** exports
+  the ones to claim as a PDF report (summary table, then each receipt on its own page) or a CSV, via
+  the share sheet on a phone or a save dialog on a computer, and marks them submitted.
+- **Assign just what a goal still needs:** a category's Assign dialog offers *Meet this month's goal
+  (+$…)*, which adds only the difference to what's already assigned, and for savings goals *Reach the
+  target now*. On the Goals screen, each goal that's short this month has an *Assign $… to meet it*
+  button that takes the difference from Ready to Assign.
+- **Clearer sync errors on Android:** every way of writing the sync file is tried before giving up,
+  and the message says whether the cloud app refuses changes or IMAB lost access.
+- **iPhone look everywhere:** Android, Mac and Windows now look like the iPhone app should: Apple's
+  system colors and type sizes, lists in white rounded groups on a grey background, large titles,
+  "‹ Back" links, an iOS tab bar on phones and a sidebar on computers and tablets, plain blue text
+  buttons, tinted buttons instead of outlined ones, form rows (label left, value right) and filled
+  text fields, capsule choices instead of chips and tabs, green switches, and a quieter encryption
+  reminder.
+
 ## 1.14.0 — 2026-11-05
 
 - **Payoff planner & schedule** for loans and mortgages: the amortization schedule (by year or by

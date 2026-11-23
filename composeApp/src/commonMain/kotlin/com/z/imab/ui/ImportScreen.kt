@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,7 +33,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -246,11 +244,11 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { nav.importAccountId?.let(nav::openAccount) ?: nav.go(Screen.Accounts) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                Column {
+                    BackLink(nav.importAccountId?.let { data.accountName(it) } ?: "Accounts") {
+                        nav.importAccountId?.let(nav::openAccount) ?: nav.go(Screen.Accounts)
                     }
-                    Text("Import bank file", style = MaterialTheme.typography.headlineSmall)
+                    Text("Import bank file", style = MaterialTheme.typography.headlineLarge)
                 }
                 Text(
                     "Download transactions from your bank as QuickBooks (.qbo) — Quicken (.qfx) and OFX (.ofx) work too. " +
@@ -261,7 +259,7 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Button(onClick = ::pick) { Text(if (fileName == null) "Choose file…" else "Choose another file…") }
                     if (statements.isNotEmpty()) {
-                        OutlinedButton(onClick = { statements.clear(); fileName = null }) { Text("Cancel") }
+                        TintedButton(onClick = { statements.clear(); fileName = null }) { Text("Cancel") }
                     }
                     if (pickers.supportsFileDrop && statements.isEmpty()) {
                         Text("or drag a file onto this window", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -275,7 +273,7 @@ fun ImportScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
                             Text(it, fontWeight = FontWeight.Medium)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 importedInto.forEach { id ->
-                                    OutlinedButton(onClick = { nav.openAccount(id) }) { Text("Open ${data.accountName(id)}") }
+                                    TintedButton(onClick = { nav.openAccount(id) }) { Text("Open ${data.accountName(id)}") }
                                 }
                             }
                         }
@@ -487,7 +485,7 @@ private fun DateWindow(st: StatementState, lastImport: LocalDate?, budget: Budge
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 DateField("Import transactions from", st.from, { st.changeFrom(it, budget) }, Modifier.width(240.dp))
                 if (st.from != st.earliest) {
-                    AssistChip(onClick = { st.changeFrom(st.earliest, budget) }, label = { Text("Everything in file (from ${st.earliest.short()})") })
+                    StatusChip(onClick = { st.changeFrom(st.earliest, budget) }, label = { Text("Everything in file (from ${st.earliest.short()})") })
                 }
             }
         } else {
@@ -615,9 +613,9 @@ private fun ImportRowView(
                 }
                 // Skip leaves it out of the Import; clicking again puts it back.
                 val usual = if (match != null) ImportAction.MATCH else ImportAction.ADD
-                OutlinedButton(onClick = { onChange(row.copy(action = if (skip) usual else ImportAction.SKIP)) }) { Text(if (skip) "Include" else "Skip") }
+                TintedButton(onClick = { onChange(row.copy(action = if (skip) usual else ImportAction.SKIP)) }) { Text(if (skip) "Include" else "Skip") }
                 if (match == null && row.splits.isNotEmpty()) {
-                    OutlinedButton(onClick = { splitting = true }, enabled = accountId != null, modifier = Modifier.width(240.dp)) {
+                    TintedButton(onClick = { splitting = true }, enabled = accountId != null, modifier = Modifier.width(240.dp)) {
                         Text("Split: " + row.splits.joinToString(", ") { data.categoryName(it.categoryId) }, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 } else if (match == null) {

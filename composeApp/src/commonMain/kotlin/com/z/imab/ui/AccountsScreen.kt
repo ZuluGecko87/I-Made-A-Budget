@@ -1,5 +1,7 @@
 package com.z.imab.ui
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.text.BasicTextField
@@ -34,13 +36,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Card
 import androidx.compose.material3.TextButton
 import com.z.imab.importer.ImportMatcher
 import com.z.imab.importer.MergeCandidate
@@ -78,21 +79,21 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Accounts", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = { nav.importInto(null) }, modifier = Modifier.padding(end = 8.dp)) { Text("Import") }
-                Button(onClick = { adding = true }) {
-                    Icon(Icons.Default.Add, null)
-                    Text("Add account")
-                }
+            LargeTitle("Accounts") {
+                TextButton(onClick = { nav.importInto(null) }) { Text("Import") }
+                IconButton(onClick = { adding = true }) { Icon(Icons.Default.Add, "Add account", tint = MaterialTheme.colorScheme.primary) }
             }
         }
         if (data.accounts.isEmpty()) {
             item {
-                Text(
-                    "Add your checking, savings and credit card accounts to get started. You can then import bank files (QBO/OFX/QFX) into them.",
-                    modifier = Modifier.padding(16.dp),
-                )
+                Group(Modifier.padding(top = 8.dp)) {
+                    Text(
+                        "Add your checking, savings and credit card accounts to get started. You can then import bank files (QBO/OFX/QFX) into them.",
+                        modifier = Modifier.padding(16.dp),
+                    )
+                    RowSeparator()
+                    TextButton(onClick = { adding = true }, modifier = Modifier.padding(horizontal = 4.dp)) { Text("Add account") }
+                }
             }
         }
         val sections = listOf(
@@ -103,21 +104,25 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
         for ((title, accounts) in sections) {
             if (accounts.isEmpty()) continue
             item(key = "h-$title") {
-                SectionHeader(title) {
-                    Text(Money.format(accounts.sumOf { data.balance(it.id) }), fontWeight = FontWeight.SemiBold)
+                GroupHeader(title) {
+                    Text(Money.format(accounts.sumOf { data.balance(it.id) }), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            items(accounts, key = { it.id }) { a ->
-                AccountRow(a, data, duplicates[a.id] ?: 0, onAdd = { addingTo = a.id }) { nav.openAccount(a.id) }
+            itemsIndexed(accounts, key = { _, a -> a.id }) { i, a ->
+                Column(Modifier.groupRow(first = i == 0, last = i == accounts.lastIndex)) {
+                    AccountRow(a, data, duplicates[a.id] ?: 0, onAdd = { addingTo = a.id }) { nav.openAccount(a.id) }
+                    if (i < accounts.lastIndex) RowSeparator()
+                }
             }
         }
         if (data.uncategorizedCount > 0) {
             item {
-                OutlinedButton(onClick = { nav.openAccount(UNCATEGORIZED_VIEW) }, modifier = Modifier.padding(16.dp)) {
-                    Text("Review ${data.uncategorizedCount} uncategorized transaction(s)")
+                Group(Modifier.padding(top = 24.dp)) {
+                    FormRow("Needs a category", "${data.uncategorizedCount}", onClick = { nav.openAccount(UNCATEGORIZED_VIEW) }, modifier = Modifier.fillMaxWidth(), filled = false)
                 }
             }
         }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 
     addingTo?.let { id ->
@@ -126,7 +131,7 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
             initial = null,
             defaultAccountId = id,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); addingTo = null },
+            onSave = { store.saveTransaction(it); addingTo = null },
             onDelete = null,
             onDismiss = { addingTo = null },
         )
@@ -149,7 +154,7 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
 @Composable
 private fun AccountRow(a: Account, data: BudgetData, possibleDuplicates: Int, onAdd: () -> Unit, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -177,7 +182,6 @@ private fun AccountRow(a: Account, data: BudgetData, possibleDuplicates: Int, on
             IconButton(onClick = onAdd) { Icon(Icons.Default.Add, "Add transaction to ${a.name}", tint = MaterialTheme.colorScheme.primary) }
         }
     }
-    HorizontalDivider()
 }
 
 @Composable
@@ -221,16 +225,8 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
     var reviewingMerges by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { nav.accountId = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-            Text(
-                if (uncategorizedView) "Needs a category" else account!!.name,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!uncategorizedView) IconButton(onClick = { editingAccount = true }) { Icon(Icons.Default.Edit, "Edit account") }
+        BackBar("Accounts", onBack = { nav.accountId = null }, title = if (uncategorizedView) "Needs a category" else account!!.name) {
+            if (!uncategorizedView) TextButton(onClick = { editingAccount = true }) { Text("Edit") }
         }
         if (!uncategorizedView) {
             FlowRow(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -248,7 +244,6 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                 }
             }
         }
-        HorizontalDivider()
         // Everything below the balances scrolls with the transactions; the search bar stays at the top of the list.
         LazyColumn(Modifier.weight(1f)) {
             if (!uncategorizedView) {
@@ -256,14 +251,15 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     Column {
                         FlowRow(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { adding = true }) { Icon(Icons.Default.Add, null); Text("Add transaction") }
+                            if (account?.closed == false) ScanReceiptButton(store, fallbackAccountId = { accountId })
                             if (isCard && data.sortedAccounts.size > 1) {
-                                OutlinedButton(onClick = { paying = paymentTemplate(data, accountId, cardInfo?.available ?: 0, store.budget.newId()) }) {
+                                TintedButton(onClick = { paying = paymentTemplate(data, accountId, cardInfo?.available ?: 0, store.budget.newId()) }) {
                                     Text("Make payment")
                                 }
                             }
-                            OutlinedButton(onClick = { nav.importInto(accountId) }) { Text("Import bank file") }
-                            OutlinedButton(onClick = { reconciling = true }) { Text("Reconcile") }
-                            if (!selecting) OutlinedButton(onClick = { selecting = true; selected.clear() }) { Text("Merge duplicates") }
+                            TintedButton(onClick = { nav.importInto(accountId) }) { Text("Import bank file") }
+                            TintedButton(onClick = { reconciling = true }) { Text("Reconcile") }
+                            if (!selecting) TintedButton(onClick = { selecting = true; selected.clear() }) { Text("Merge duplicates") }
                         }
                         if (fileDrop) {
                             Text(
@@ -321,7 +317,6 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                             )
                         }
                         SearchBar(query, { query = it }, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp))
-                        HorizontalDivider()
                     }
                 }
             }
@@ -339,7 +334,8 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     )
                 }
             }
-            items(rows, key = { it.first.id }) { (t, running) ->
+            itemsIndexed(rows, key = { _, r -> r.first.id }) { i, (t, running) ->
+                Column(Modifier.groupRow(first = i == 0, last = i == rows.lastIndex)) {
                 TxnRow(
                     t, data, running.takeIf { wide && !uncategorizedView && query.isBlank() },
                     showAccount = uncategorizedView,
@@ -359,7 +355,10 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     }),
                     onToggleCleared = { store.budget.setCleared(t.id, !t.cleared) },
                 )
+                    if (i < rows.lastIndex) RowSeparator(start = if (wide) 88.dp else 16.dp)
+                }
             }
+            item(key = "end") { Spacer(Modifier.height(24.dp)) }
         }
     }
 
@@ -370,8 +369,8 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             initial = t,
             defaultAccountId = if (uncategorizedView) data.sortedAccounts.first().id else accountId,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); adding = false; editing = null },
-            onDelete = t?.let { { store.budget.deleteTransaction(it.id); editing = null } },
+            onSave = { store.saveTransaction(it); adding = false; editing = null },
+            onDelete = t?.let { { store.deleteTransaction(it.id); editing = null } },
             onDismiss = { adding = false; editing = null },
         )
     }
@@ -394,7 +393,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             initial = t,
             defaultAccountId = t.accountId,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); paying = null },
+            onSave = { store.saveTransaction(it); paying = null },
             onDelete = null,
             onDismiss = { paying = null },
         )
@@ -469,6 +468,7 @@ private fun TxnRow(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(data.payeeLabel(t), Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
                 if (t.merged) MergedLabel()
+                if (t.receipt != null) Icon(ReceiptIcon, "Has receipt", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val needs = data.needsCategory(t)
             val sub = buildString {
@@ -478,6 +478,7 @@ private fun TxnRow(
                 if (t.scheduledId != null && !t.cleared) append(" · scheduled")
                 t.loanSplit?.let { append(" · principal ${Money.format(it.principal)}, interest ${Money.format(it.interest)}, escrow ${Money.format(it.escrow)}") }
                 if (possibleDuplicate) append(" · possible duplicate")
+                if (t.workExpense) append(if (t.expenseSubmitted != null) " · work, submitted" else " · work expense")
             }
             Text(
                 sub,
@@ -510,16 +511,16 @@ private fun TxnRow(
             }
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
 
 /** A slim search box, so it doesn't take much of a phone screen. */
 @Composable
 private fun SearchBar(query: String, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    // The iOS search field: a rounded grey field, a little darker than the background.
     Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = modifier.height(40.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = modifier.height(38.dp),
     ) {
         Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Search, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -672,7 +673,7 @@ private fun MergeBanner(count: Int, reviewing: Boolean, onReview: () -> Unit, on
 
 @Composable
 private fun MergeCard(c: MergeCandidate, data: BudgetData, onMerge: () -> Unit, onKeepBoth: () -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             MergeLine("You entered", c.entered, data)
             MergeLine("From bank", c.bank, data)
@@ -684,7 +685,7 @@ private fun MergeCard(c: MergeCandidate, data: BudgetData, onMerge: () -> Unit, 
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onMerge) { Text("Merge") }
-                OutlinedButton(onClick = onKeepBoth) { Text("Not a duplicate") }
+                TintedButton(onClick = onKeepBoth) { Text("Not a duplicate") }
             }
         }
     }

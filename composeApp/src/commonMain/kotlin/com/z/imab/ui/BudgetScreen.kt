@@ -1,5 +1,6 @@
 package com.z.imab.ui
 
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +28,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -41,8 +41,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -131,12 +129,14 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             if (month != YearMonth.of(today())) TextButton(onClick = { month = YearMonth.of(today()) }) { Text("Today") }
             Spacer(Modifier.weight(1f))
             if (wide) {
-                OutlinedButton(onClick = { editingTxn = newTransaction(null) }, modifier = Modifier.padding(end = 12.dp)) {
+                TintedButton(onClick = { editingTxn = newTransaction(null) }, modifier = Modifier.padding(end = 8.dp)) {
                     Icon(Icons.Default.Add, null)
                     Text("Add transaction")
                 }
+                ScanReceiptButton(store, fallbackAccountId = { newTransaction(null).accountId }, modifier = Modifier.padding(end = 12.dp))
                 ReadyToAssignCard(mb.readyToAssign) { assigningMany = true }
             } else {
+                ScanReceiptButton(store, fallbackAccountId = { newTransaction(null).accountId }, iconOnly = true)
                 IconButton(onClick = { editingTxn = newTransaction(null) }) { Icon(Icons.Default.Add, "Add transaction") }
             }
         }
@@ -144,19 +144,19 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
 
         FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (data.uncategorizedCount > 0) {
-                AssistChip(
+                StatusChip(
                     onClick = { nav.openAccount(UNCATEGORIZED_VIEW) },
                     label = { Text("${data.uncategorizedCount} transaction(s) need a category") },
                 )
             }
             if (mb.overspentCount > 0) {
-                AssistChip(onClick = {}, label = { Text("${mb.overspentCount} overspent categor${if (mb.overspentCount == 1) "y" else "ies"}") })
+                StatusChip(onClick = {}, label = { Text("${mb.overspentCount} overspent categor${if (mb.overspentCount == 1) "y" else "ies"}") })
             }
             val needs = remember(data, month) { GoalBoard(data, month).needs() }
             val stillNeeded = needs.sumOf { maxOf(0, it.wanted - it.assigned) }
             if (stillNeeded > 0) {
                 val canFund = minOf(stillNeeded, BudgetMath.freeToAssign(data, month, YearMonth.of(today())))
-                AssistChip(
+                StatusChip(
                     onClick = { if (canFund > 0) fundingGoals = true },
                     label = {
                         Text(
@@ -167,13 +167,13 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                 )
             }
             if (mb.returnedLastMonth > 0) {
-                AssistChip(onClick = {}, label = { Text("${Money.format(mb.returnedLastMonth)} returned from last month") })
+                StatusChip(onClick = {}, label = { Text("${Money.format(mb.returnedLastMonth)} returned from last month") })
             }
             if (mb.overspentLastMonth > 0) {
-                AssistChip(onClick = {}, label = { Text("${Money.format(mb.overspentLastMonth)} overspent last month") })
+                StatusChip(onClick = {}, label = { Text("${Money.format(mb.overspentLastMonth)} overspent last month") })
             }
             if (wide) {
-                AssistChip(onClick = {}, label = { Text("Income this month: ${Money.format(mb.incomeThisMonth)}") })
+                StatusChip(onClick = {}, label = { Text("Income this month: ${Money.format(mb.incomeThisMonth)}") })
             }
         }
 
@@ -194,7 +194,8 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
         LazyColumn(Modifier.weight(1f)) {
             if (mb.cards.isNotEmpty()) {
                 item(key = "g-cards") { CardGroupRow(mb.cards.map { cardFigures(it, mb.category(it.categoryId)) }, wide) }
-                items(mb.cards, key = { "p-${it.accountId}" }) { card ->
+                itemsIndexed(mb.cards, key = { _, c -> "p-${c.accountId}" }) { i, card ->
+                    Column(Modifier.groupRow(first = i == 0, last = i == mb.cards.lastIndex)) {
                     CardPaymentRow(
                         name = data.accountName(card.accountId),
                         card = card,
@@ -209,6 +210,8 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                             assigning = card.categoryId to data.categoryName(card.categoryId)
                         },
                     )
+                    if (i < mb.cards.lastIndex) RowSeparator()
+                    }
                 }
             }
             for (g in data.sortedGroups) {
@@ -223,7 +226,8 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         onDelete = { deleting = "Delete group \"${g.name}\" and its ${cats.size} categories?" to { store.budget.deleteGroup(g.id) } },
                     )
                 }
-                items(cats, key = { "c-${it.id}" }) { c ->
+                itemsIndexed(cats, key = { _, c -> "c-${c.id}" }) { i, c ->
+                    Column(Modifier.groupRow(first = i == 0, last = i == cats.lastIndex)) {
                     CategoryRow(
                         category = c,
                         cm = mb.category(c.id),
@@ -239,10 +243,12 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
                         onAddTransaction = { editingTxn = newTransaction(c.id) },
                         onNewCategory = { addingTo = g },
                     )
+                    if (i < cats.lastIndex) RowSeparator()
+                    }
                 }
             }
             item {
-                TextButton(onClick = { addingGroup = true }, modifier = Modifier.padding(8.dp)) {
+                TextButton(onClick = { addingGroup = true }, modifier = Modifier.padding(start = GroupInset, top = 12.dp, bottom = 24.dp)) {
                     Icon(Icons.Default.Add, null)
                     Text("Add category group")
                 }
@@ -310,10 +316,10 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             initial = t,
             defaultAccountId = t.accountId,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); editingTxn = null },
+            onSave = { store.saveTransaction(it); editingTxn = null },
             // A new transaction started from the budget has nothing to delete yet.
             onDelete = if (t.id in data.transactions) {
-                { store.budget.deleteTransaction(t.id); editingTxn = null }
+                { store.deleteTransaction(t.id); editingTxn = null }
             } else null,
             onDismiss = { editingTxn = null },
         )
@@ -351,7 +357,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             initial = t,
             defaultAccountId = t.accountId,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); paying = null },
+            onSave = { store.saveTransaction(it); paying = null },
             onDelete = null,
             onDismiss = { paying = null },
         )
@@ -413,16 +419,29 @@ private fun ReadyToAssignCard(cents: Long, modifier: Modifier = Modifier, onClic
 @Composable
 private fun BudgetHeaderRow(wide: Boolean) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 48.dp, top = 12.dp, bottom = 4.dp),
+        Modifier.fillMaxWidth().padding(start = GroupInset + 16.dp, end = GroupInset + menuWidth(wide), top = 12.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val style = MaterialTheme.typography.labelMedium
-        Text("CATEGORY", style = style, modifier = Modifier.weight(1f))
-        Text("ASSIGNED", style = style, modifier = Modifier.width(if (wide) 120.dp else 90.dp), textAlign = TextAlign.End)
-        if (wide) Text("ACTIVITY", style = style, modifier = Modifier.width(120.dp), textAlign = TextAlign.End)
-        Text("AVAILABLE", style = style, modifier = Modifier.width(if (wide) 130.dp else 105.dp), textAlign = TextAlign.End)
+        val style = MaterialTheme.typography.bodySmall
+        val color = MaterialTheme.colorScheme.onSurfaceVariant
+        Text("Category", style = style, color = color, modifier = Modifier.weight(1f))
+        Text("Assigned", style = style, color = color, modifier = Modifier.width(if (wide) 120.dp else 90.dp), textAlign = TextAlign.End)
+        if (wide) Text("Activity", style = style, color = color, modifier = Modifier.width(120.dp), textAlign = TextAlign.End)
+        Text("Available", style = style, color = color, modifier = Modifier.width(if (wide) 130.dp else 105.dp), textAlign = TextAlign.End)
     }
-    HorizontalDivider()
+}
+
+/** The ⋮ button at the end of each row: narrower on a phone, so category names have room. */
+private fun menuWidth(wide: Boolean) = if (wide) 48.dp else 36.dp
+
+/** A group's totals in the header above it, lined up with the columns of its rows. */
+@Composable
+private fun GroupTotals(totals: List<CategoryMonth>, wide: Boolean) {
+    val style = MaterialTheme.typography.bodyMedium
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    Text(Money.format(totals.sumOf { it.assigned }), Modifier.width(if (wide) 120.dp else 90.dp), textAlign = TextAlign.End, style = style, color = color)
+    if (wide) Text(Money.format(totals.sumOf { it.activity }), Modifier.width(120.dp), textAlign = TextAlign.End, style = style, color = color)
+    Text(Money.format(totals.sumOf { it.available }), Modifier.width(if (wide) 130.dp else 105.dp), textAlign = TextAlign.End, style = style, color = color)
 }
 
 @Composable
@@ -436,16 +455,14 @@ private fun GroupRow(
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(start = 16.dp),
+        Modifier.fillMaxWidth().padding(start = GroupInset + 16.dp, end = GroupInset, top = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(group.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        IconButton(onClick = onAdd) { Icon(Icons.Default.Add, "Add category") }
-        Text(Money.format(totals.sumOf { it.assigned }), Modifier.width(if (wide) 120.dp else 90.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelLarge)
-        if (wide) Text(Money.format(totals.sumOf { it.activity }), Modifier.width(120.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelLarge)
-        Text(Money.format(totals.sumOf { it.available }), Modifier.width(if (wide) 130.dp else 105.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelLarge)
+        Text(group.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        IconButton(onClick = onAdd) { Icon(Icons.Default.Add, "Add category", tint = MaterialTheme.colorScheme.primary) }
+        GroupTotals(totals, wide)
         Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Group options") }
+            IconButton(onClick = { menu = true }, Modifier.width(menuWidth(wide))) { Icon(Icons.Default.MoreVert, "Group options", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Add category") }, onClick = { menu = false; onAdd() })
                 DropdownMenuItem(text = { Text("Rename group") }, onClick = { menu = false; onRename() })
@@ -509,7 +526,7 @@ private fun CategoryRow(
             )
         }
         Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Category options") }
+            IconButton(onClick = { menu = true }, Modifier.width(menuWidth(wide))) { Icon(Icons.Default.MoreVert, "Category options") }
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Assign money") }, onClick = { menu = false; onAssign() })
                 DropdownMenuItem(text = { Text("Move money…") }, onClick = { menu = false; onMoveMoney() })
@@ -522,7 +539,6 @@ private fun CategoryRow(
             }
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
 
 @Composable
@@ -541,9 +557,9 @@ private fun EditCategoryDialog(
         title = { Text("Edit category") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                InputField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Picker("Group", groups.map { PickerOption(it.id, it.name) }, groupId, { groupId = it }, Modifier.fillMaxWidth())
-                OutlinedButton(onClick = onGoal) { Text(if (category.goal == null) "Set goal…" else "Edit goal…") }
+                TintedButton(onClick = onGoal) { Text(if (category.goal == null) "Set goal…" else "Edit goal…") }
             }
         },
         confirmButton = {
@@ -668,7 +684,7 @@ internal fun AssignDialog(
                     }
                 } else {
                 if (renameable) {
-                    OutlinedTextField(newName, { newName = it }, label = { Text("Category name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    InputField(newName, { newName = it }, label = { Text("Category name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
                 Text("Activity ${Money.format(current.activity)} · Available ${Money.format(current.available)}", style = MaterialTheme.typography.bodySmall)
                 if (card != null) {
@@ -741,22 +757,33 @@ internal fun AssignDialog(
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (current.available < 0) {
-                        AssistChip(onClick = { text = Money.toInput(current.assigned - current.available) }, label = { Text("Cover overspending") })
+                        StatusChip(onClick = { text = Money.toInput(current.assigned - current.available) }, label = { Text("Cover overspending") })
                     }
-                    if (goal != null && !goal.reached && goal.assignThisMonth > 0) {
-                        AssistChip(
-                            onClick = { text = Money.toInput(goal.assignThisMonth) },
-                            label = { Text("Goal: ${Money.format(goal.assignThisMonth)} this month") },
-                        )
+                    if (goal != null && !goal.reached) {
+                        // Only the difference: what's assigned already counts toward the goal.
+                        val toMeet = goal.shortfall(current.assigned)
+                        if (toMeet > 0) {
+                            StatusChip(
+                                onClick = { text = Money.toInput(current.assigned + toMeet) },
+                                label = { Text("Meet this month's goal (+${Money.format(toMeet)})") },
+                            )
+                        }
+                        // A savings goal paid off over months can also be finished now.
+                        if (!goal.isMonthly && goal.remaining > toMeet) {
+                            StatusChip(
+                                onClick = { text = Money.toInput(current.assigned + goal.remaining) },
+                                label = { Text("Reach the target now (+${Money.format(goal.remaining)})") },
+                            )
+                        }
                     }
                     if (card != null && card.coverage < 0) {
-                        AssistChip(
+                        StatusChip(
                             onClick = { text = Money.toInput(current.assigned - card.coverage) },
                             label = { Text("Fund whole balance (+${Money.format(-card.coverage)})") },
                         )
                     }
-                    AssistChip(onClick = { text = Money.toInput(lastMonth.assigned) }, label = { Text("Assigned last month (${Money.format(lastMonth.assigned)})") })
-                    AssistChip(onClick = { text = Money.toInput(-lastMonth.activity) }, label = { Text("Spent last month (${Money.format(-lastMonth.activity)})") })
+                    StatusChip(onClick = { text = Money.toInput(lastMonth.assigned) }, label = { Text("Assigned last month (${Money.format(lastMonth.assigned)})") })
+                    StatusChip(onClick = { text = Money.toInput(-lastMonth.activity) }, label = { Text("Spent last month (${Money.format(-lastMonth.activity)})") })
                 }
                 }
             }
@@ -779,13 +806,11 @@ internal fun AssignDialog(
 private fun CardGroupRow(totals: List<CategoryMonth>, wide: Boolean) {
     // Card rows are shown as cardFigures: assigned + money in from spending, payments, and coverage.
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 48.dp),
+        Modifier.fillMaxWidth().padding(start = GroupInset + 16.dp, top = 26.dp, bottom = 12.dp, end = GroupInset + menuWidth(wide)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(if (wide) "Credit Card Payments" else "Card Payments", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(Money.format(totals.sumOf { it.assigned }), Modifier.width(if (wide) 120.dp else 90.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelLarge)
-        if (wide) Text(Money.format(totals.sumOf { it.activity }), Modifier.width(120.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelLarge)
-        Text(Money.format(totals.sumOf { it.available }), Modifier.width(if (wide) 130.dp else 105.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.labelLarge)
+        Text(if (wide) "Credit card payments" else "Card payments", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        GroupTotals(totals, wide)
     }
 }
 
@@ -858,7 +883,7 @@ private fun CardPaymentRow(
             AvailablePill(shown.available, Modifier.clickable(onClick = onAvailable), creditOverspending = cm.available >= 0)
         }
         Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Card options") }
+            IconButton(onClick = { menu = true }, Modifier.width(menuWidth(wide))) { Icon(Icons.Default.MoreVert, "Card options") }
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Assign money") }, onClick = { menu = false; onAssign() })
                 DropdownMenuItem(text = { Text("Record payment") }, onClick = { menu = false; onPay() })
@@ -866,7 +891,6 @@ private fun CardPaymentRow(
             }
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
 
 /** The transactions behind a category's activity for one month. Tap one to edit it. */

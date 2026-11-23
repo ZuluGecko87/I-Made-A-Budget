@@ -13,9 +13,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,6 +21,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -187,11 +187,11 @@ private fun TxnFields(form: TxnForm, data: BudgetData, dateLabel: String, split:
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        FilterChip(selected = form.outflow, onClick = { form.outflow = true }, label = { Text("Outflow") })
-        FilterChip(selected = !form.outflow, onClick = { form.outflow = false }, label = { Text("Inflow") })
+        ChoiceChip(selected = form.outflow, onClick = { form.outflow = true }, label = { Text("Outflow") })
+        ChoiceChip(selected = !form.outflow, onClick = { form.outflow = false }, label = { Text("Inflow") })
     }
     MoneyField("Amount", form.amountText, { form.amountText = it }, Modifier.fillMaxWidth(), isError = form.amountText.isNotEmpty() && Money.parse(form.amountText) == null)
-    OutlinedTextField(form.memo, { form.memo = it }, label = { Text("Memo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    InputField(form.memo, { form.memo = it }, label = { Text("Memo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     if (split?.active == true) SplitLines(split, form, data)
 }
 
@@ -204,7 +204,13 @@ fun TransactionDialog(
     onSave: (Transaction) -> Unit,
     onDelete: (() -> Unit)?,
     onDismiss: () -> Unit,
+    /** Set when the transaction comes from a scanned receipt: what was read, and the photo. */
+    scan: PendingReceipt? = null,
 ) {
+    val store = LocalStore.current
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf(false) }
+    val receipt = remember { ReceiptForm(initial?.receipt, scan?.jpeg, initial?.workExpense ?: false, initial?.expenseSubmitted) }
     val form = remember {
         TxnForm(
             accountId = initial?.accountId ?: defaultAccountId,
@@ -225,10 +231,11 @@ fun TransactionDialog(
     val isCardPayment = isNew && data.isCreditAccount(initial?.transferAccountId) && (initial?.amount ?: 0) < 0
 
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (isCardPayment) "Record card payment" else if (isNew) "Add transaction" else "Edit transaction") },
+        onDismissRequest = { if (!saving) onDismiss() },
+        title = { Text(if (isCardPayment) "Record card payment" else if (scan != null) "Add from receipt" else if (isNew) "Add transaction" else "Edit transaction") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (scan != null) ScanSummary(scan, form.accountId, data)
                 // A loan payment is already split into principal, interest and escrow.
                 TxnFields(form, data, "Date", split, canSplit = loanId == null)
                 val loans = data.loanAccounts.filter { it.id != form.accountId }
@@ -268,34 +275,51 @@ fun TransactionDialog(
                 if (initial?.importId != null) {
                     Text("Imported from bank", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                if (!isCardPayment) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ReceiptFields(receipt)
+                }
             }
         },
         confirmButton = {
-            TextButton(enabled = form.valid && split.ready(form), onClick = {
+            TextButton(enabled = form.valid && split.ready(form) && !saving, onClick = {
                 val amount = form.amount ?: return@TextButton
                 val base = initial ?: Transaction(newId(), form.accountId, form.date, amount)
                 val transfer = Choice.transferId(form.choice).takeIf { !split.active }
                 val splits = if (split.active) split.toSplits(form.outflow) else emptyList()
-                onSave(
-                    base.copy(
-                        accountId = form.accountId,
-                        date = form.date,
-                        amount = amount,
-                        payee = if (transfer != null) "" else form.payee.trim(),
-                        memo = form.memo.trim(),
-                        categoryId = if (split.active) null else form.categoryToSave(data),
-                        splits = splits,
-                        transferAccountId = transfer,
-                        // Changing the transfer target re-links to a new leg.
-                        transferPairId = base.transferPairId.takeIf { transfer != null && transfer == base.transferAccountId },
-                        cleared = cleared || reconciled,
-                        reconciled = reconciled,
-                        loanSplit = loanId?.takeIf { transfer == null && amount < 0 && !split.active }?.let { id ->
-                            base.loanSplit?.takeIf { it.loanAccountId == id } ?: com.z.imab.model.LoanSplit(id, 0, 0, 0)
-                        },
-                    )
+                val edited = base.copy(
+                    accountId = form.accountId,
+                    date = form.date,
+                    amount = amount,
+                    payee = if (transfer != null) "" else form.payee.trim(),
+                    memo = form.memo.trim(),
+                    categoryId = if (split.active) null else form.categoryToSave(data),
+                    splits = splits,
+                    transferAccountId = transfer,
+                    // Changing the transfer target re-links to a new leg.
+                    transferPairId = base.transferPairId.takeIf { transfer != null && transfer == base.transferAccountId },
+                    cleared = cleared || reconciled,
+                    reconciled = reconciled,
+                    loanSplit = loanId?.takeIf { transfer == null && amount < 0 && !split.active }?.let { id ->
+                        base.loanSplit?.takeIf { it.loanAccountId == id } ?: com.z.imab.model.LoanSplit(id, 0, 0, 0)
+                    },
+                    receipt = receipt.kept,
+                    workExpense = receipt.workExpense,
+                    expenseSubmitted = receipt.submitted.takeIf { receipt.workExpense },
                 )
-            }) { Text("Save") }
+                val photo = receipt.newPhoto
+                if (photo != null && store != null) {
+                    // The photo is written to this device's storage first, then saved on the transaction.
+                    saving = true
+                    scope.launch {
+                        val ref = runCatching { store.saveReceiptImage(photo) }.getOrNull()
+                        saving = false
+                        onSave(if (ref != null) edited.copy(receipt = ref) else edited)
+                    }
+                } else {
+                    onSave(edited)
+                }
+            }) { Text(if (saving) "Saving…" else "Save") }
         },
         dismissButton = {
             Row {
@@ -445,7 +469,7 @@ fun AccountDialog(
         title = { Text(if (initial == null) "Add account" else "Edit account") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                InputField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Picker("Type", AccountType.entries.map { PickerOption(it, it.label) }, type, {
                     // Pick a sensible default when the type changes; investments are usually tracked.
                     if (it == AccountType.INVESTMENT) onBudget = false
@@ -454,8 +478,8 @@ fun AccountDialog(
                 }, Modifier.fillMaxWidth())
                 // Budget vs tracking, as an explicit choice. Loans and mortgages are always tracking.
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(onBudget && !isLoan, { onBudget = true }, enabled = !isLoan, label = { Text("Budget account") })
-                    FilterChip(!onBudget || isLoan, { onBudget = false }, label = { Text("Tracking account") })
+                    ChoiceChip(onBudget && !isLoan, { onBudget = true }, enabled = !isLoan, label = { Text("Budget account") })
+                    ChoiceChip(!onBudget || isLoan, { onBudget = false }, label = { Text("Tracking account") })
                 }
                 Text(
                     when {
@@ -484,7 +508,7 @@ fun AccountDialog(
                         "Used to split each payment into interest, escrow and principal.",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    OutlinedTextField(
+                    InputField(
                         rateText, { rateText = it },
                         label = { Text("Interest rate (% per year)") },
                         placeholder = { Text("e.g. 6.25") },

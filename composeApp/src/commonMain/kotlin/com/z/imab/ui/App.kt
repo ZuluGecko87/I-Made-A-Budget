@@ -1,5 +1,22 @@
 package com.z.imab.ui
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -63,6 +80,7 @@ enum class Screen(val label: String, val icon: ImageVector, val inNav: Boolean =
     Reports("Reports", Icons.AutoMirrored.Filled.List),
     Scheduled("Scheduled", Icons.Default.DateRange),
     Import("Import", Icons.Default.Refresh, inNav = false),
+    Expenses("Work expenses", ReceiptIcon, inNav = false),
     Settings("Settings", Icons.Default.Settings),
 }
 
@@ -128,6 +146,10 @@ class NavState {
             importAccountId?.let(::openAccount) ?: go(Screen.Accounts)
             return true
         }
+        if (screen == Screen.Expenses) {
+            go(Screen.Reports)
+            return true
+        }
         if (screen != Screen.Budget) {
             go(Screen.Budget)
             return true
@@ -145,7 +167,7 @@ fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean
         "dark" -> true
         else -> isSystemInDarkTheme()
     }
-    MaterialTheme(colorScheme = if (dark) DarkColors else LightColors) {
+    MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, typography = ImabTypography, shapes = ImabShapes) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             val loaded by store.loaded.collectAsState()
             // The splash shows for a few seconds (tap to skip) and until the budget has loaded.
@@ -160,7 +182,11 @@ fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean
                     if ((lock as? LockState.NeedsPassphrase)?.local == true) {
                         UnlockScreen(store)
                     } else {
-                        CompositionLocalProvider(LocalCreateCategory provides { name, groupId -> store.budget.addCategory(groupId, name) }) {
+                        CompositionLocalProvider(
+                            LocalCreateCategory provides { name, groupId -> store.budget.addCategory(groupId, name) },
+                            LocalPickers provides pickers,
+                            LocalStore provides store,
+                        ) {
                             MainLayout(store, pickers, nav)
                         }
                     }
@@ -211,37 +237,64 @@ private fun MainLayout(store: BudgetStore, pickers: Pickers, nav: NavState) {
         val wide = maxWidth >= 720.dp
         if (wide) {
             Row(Modifier.fillMaxSize()) {
-                NavigationRail(header = { RailHeader(store) }) {
-                    Screen.entries.filter { it.inNav }.forEach { s ->
-                        NavigationRailItem(
-                            selected = nav.screen == s || (s == Screen.Accounts && nav.screen == Screen.Import),
-                            onClick = { nav.go(s) },
-                            icon = { Icon(s.icon, s.label) },
-                            label = { Text(s.label) },
-                        )
-                    }
-                }
-                VerticalDivider()
+                Sidebar(store, nav)
+                VerticalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
                 Box(Modifier.weight(1f)) { Content(store, pickers, nav, wide = true) }
             }
         } else {
-            Scaffold(
-                bottomBar = {
-                    NavigationBar {
-                        Screen.entries.filter { it.inNav }.forEach { s ->
-                            NavigationBarItem(
-                                selected = nav.screen == s || (s == Screen.Accounts && nav.screen == Screen.Import),
-                                onClick = { nav.go(s) },
-                                icon = { Icon(s.icon, s.label) },
-                                label = { Text(s.label, maxLines = 1) },
-                                // Six tabs don't fit labelled on a phone: label only the selected one.
-                                alwaysShowLabel = false,
-                            )
-                        }
-                    }
-                },
-            ) { pad ->
+            Scaffold(bottomBar = { TabBar(nav) }) { pad ->
                 Box(Modifier.padding(pad)) { Content(store, pickers, nav, wide = false) }
+            }
+        }
+    }
+}
+
+/** Whether [s] is the tab to highlight; Import and Work expenses belong to Accounts and Reports. */
+private fun NavState.isCurrent(s: Screen) =
+    screen == s || (s == Screen.Accounts && screen == Screen.Import) || (s == Screen.Reports && screen == Screen.Expenses)
+
+/** The iOS tab bar: a hairline on top, every tab labelled, the current one in the accent color. */
+@Composable
+private fun TabBar(nav: NavState) {
+    val dark = MaterialTheme.colorScheme.background.let { it.red + it.green + it.blue } < 1.5f
+    Column(Modifier.fillMaxWidth().background(if (dark) Ios.barBackgroundDark else Ios.barBackground)) {
+        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        Row(Modifier.fillMaxWidth().height(52.dp)) {
+            Screen.entries.filter { it.inNav }.forEach { s ->
+                val selected = nav.isCurrent(s)
+                val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                Column(
+                    Modifier.weight(1f).fillMaxHeight()
+                        .selectable(selected, role = Role.Tab, interactionSource = remember { MutableInteractionSource() }, indication = null) { nav.go(s) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(s.icon, null, tint = tint, modifier = Modifier.size(24.dp))
+                    Text(s.label, color = tint, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1, letterSpacing = 0.sp)
+                }
+            }
+        }
+        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
+    }
+}
+
+/** On a computer or tablet: a sidebar listing the sections, as in iPad and Mac apps. */
+@Composable
+private fun Sidebar(store: BudgetStore, nav: NavState) {
+    Column(Modifier.width(212.dp).fillMaxHeight().background(cellColor).padding(horizontal = 10.dp)) {
+        RailHeader(store)
+        Screen.entries.filter { it.inNav }.forEach { s ->
+            val selected = nav.isCurrent(s)
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 1.dp).clip(MaterialTheme.shapes.medium)
+                    .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+                    .selectable(selected, role = Role.Tab) { nav.go(s) }
+                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(s.icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(s.label, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontWeight = if (selected) FontWeight.SemiBold else null)
             }
         }
     }
@@ -250,10 +303,10 @@ private fun MainLayout(store: BudgetStore, pickers: Pickers, nav: NavState) {
 @Composable
 private fun RailHeader(store: BudgetStore) {
     val sync by store.syncStatus.collectAsState()
-    Column(Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("IMAB", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+    Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 20.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("IMAB", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
         when (sync) {
-            is SyncStatus.Syncing -> Text("syncing…", style = MaterialTheme.typography.labelSmall)
+            is SyncStatus.Syncing -> Text("Syncing…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             is SyncStatus.Failed -> Icon(Icons.Default.Warning, "Sync failed", tint = MaterialTheme.colorScheme.error)
             else -> {}
         }
@@ -281,7 +334,8 @@ private fun Screens(store: BudgetStore, pickers: Pickers, nav: NavState, wide: B
             }
         }
         Screen.Goals -> GoalsScreen(store)
-        Screen.Reports -> ReportsScreen(store)
+        Screen.Reports -> ReportsScreen(store, onWorkExpenses = { nav.go(Screen.Expenses) })
+        Screen.Expenses -> ExpensesScreen(store, pickers, nav)
         Screen.Scheduled -> ScheduledScreen(store, wide)
         Screen.Import -> ImportScreen(store, pickers, nav)
         Screen.Settings -> SettingsScreen(store, pickers, nav)

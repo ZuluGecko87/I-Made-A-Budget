@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -89,7 +87,7 @@ fun AssignMoneyDialog(
                         Text(if (left < 0) "More than you have to assign" else "left to assign", style = MaterialTheme.typography.labelSmall)
                     }
                     if (needing.isNotEmpty()) {
-                        OutlinedButton(onClick = {
+                        TintedButton(onClick = {
                             // Overspending first, then monthly bills, savings goals and cards, within what's available.
                             adds.clear()
                             var remaining = free
@@ -173,7 +171,7 @@ private fun AssignRowView(r: AssignRow, adds: MutableMap<String, String>, showGr
             )
         }
         if (r.need > 0) {
-            AssistChip(
+            StatusChip(
                 onClick = { adds[r.id] = Money.toInput(r.need) },
                 label = { Text("+${Money.format(r.need)} ${r.needLabel ?: ""}".trim()) },
             )
