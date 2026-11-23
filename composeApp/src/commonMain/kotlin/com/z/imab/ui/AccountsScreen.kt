@@ -126,7 +126,7 @@ fun AccountsScreen(store: BudgetStore, nav: NavState) {
             initial = null,
             defaultAccountId = id,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); addingTo = null },
+            onSave = { store.saveTransaction(it); addingTo = null },
             onDelete = null,
             onDismiss = { addingTo = null },
         )
@@ -256,6 +256,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
                     Column {
                         FlowRow(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { adding = true }) { Icon(Icons.Default.Add, null); Text("Add transaction") }
+                            if (account?.closed == false) ScanReceiptButton(store, fallbackAccountId = { accountId })
                             if (isCard && data.sortedAccounts.size > 1) {
                                 OutlinedButton(onClick = { paying = paymentTemplate(data, accountId, cardInfo?.available ?: 0, store.budget.newId()) }) {
                                     Text("Make payment")
@@ -370,8 +371,8 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             initial = t,
             defaultAccountId = if (uncategorizedView) data.sortedAccounts.first().id else accountId,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); adding = false; editing = null },
-            onDelete = t?.let { { store.budget.deleteTransaction(it.id); editing = null } },
+            onSave = { store.saveTransaction(it); adding = false; editing = null },
+            onDelete = t?.let { { store.deleteTransaction(it.id); editing = null } },
             onDismiss = { adding = false; editing = null },
         )
     }
@@ -394,7 +395,7 @@ fun RegisterScreen(store: BudgetStore, nav: NavState, accountId: String, wide: B
             initial = t,
             defaultAccountId = t.accountId,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); paying = null },
+            onSave = { store.saveTransaction(it); paying = null },
             onDelete = null,
             onDismiss = { paying = null },
         )
@@ -469,6 +470,7 @@ private fun TxnRow(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(data.payeeLabel(t), Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
                 if (t.merged) MergedLabel()
+                if (t.receipt != null) Icon(ReceiptIcon, "Has receipt", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val needs = data.needsCategory(t)
             val sub = buildString {
@@ -478,6 +480,7 @@ private fun TxnRow(
                 if (t.scheduledId != null && !t.cleared) append(" · scheduled")
                 t.loanSplit?.let { append(" · principal ${Money.format(it.principal)}, interest ${Money.format(it.interest)}, escrow ${Money.format(it.escrow)}") }
                 if (possibleDuplicate) append(" · possible duplicate")
+                if (t.workExpense) append(if (t.expenseSubmitted != null) " · work, submitted" else " · work expense")
             }
             Text(
                 sub,

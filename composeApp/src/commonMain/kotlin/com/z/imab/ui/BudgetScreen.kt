@@ -131,12 +131,14 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             if (month != YearMonth.of(today())) TextButton(onClick = { month = YearMonth.of(today()) }) { Text("Today") }
             Spacer(Modifier.weight(1f))
             if (wide) {
-                OutlinedButton(onClick = { editingTxn = newTransaction(null) }, modifier = Modifier.padding(end = 12.dp)) {
+                OutlinedButton(onClick = { editingTxn = newTransaction(null) }, modifier = Modifier.padding(end = 8.dp)) {
                     Icon(Icons.Default.Add, null)
                     Text("Add transaction")
                 }
+                ScanReceiptButton(store, fallbackAccountId = { newTransaction(null).accountId }, modifier = Modifier.padding(end = 12.dp))
                 ReadyToAssignCard(mb.readyToAssign) { assigningMany = true }
             } else {
+                ScanReceiptButton(store, fallbackAccountId = { newTransaction(null).accountId }, iconOnly = true)
                 IconButton(onClick = { editingTxn = newTransaction(null) }) { Icon(Icons.Default.Add, "Add transaction") }
             }
         }
@@ -310,10 +312,10 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             initial = t,
             defaultAccountId = t.accountId,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); editingTxn = null },
+            onSave = { store.saveTransaction(it); editingTxn = null },
             // A new transaction started from the budget has nothing to delete yet.
             onDelete = if (t.id in data.transactions) {
-                { store.budget.deleteTransaction(t.id); editingTxn = null }
+                { store.deleteTransaction(t.id); editingTxn = null }
             } else null,
             onDismiss = { editingTxn = null },
         )
@@ -351,7 +353,7 @@ fun BudgetScreen(store: BudgetStore, nav: NavState, wide: Boolean) {
             initial = t,
             defaultAccountId = t.accountId,
             newId = store.budget::newId,
-            onSave = { store.budget.saveTransaction(it); paying = null },
+            onSave = { store.saveTransaction(it); paying = null },
             onDelete = null,
             onDismiss = { paying = null },
         )

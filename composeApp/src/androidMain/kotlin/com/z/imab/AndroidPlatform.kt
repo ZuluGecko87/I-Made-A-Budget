@@ -1,6 +1,11 @@
 package com.z.imab
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.pm.PackageManager
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.core.content.FileProvider
+import com.z.imab.receipt.OcrLine
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -44,6 +49,11 @@ class AndroidStorage(private val context: Context) : Storage {
             file.writeText(text)
             tmp.delete()
         }
+    }
+
+    override suspend fun deleteLocal(name: String) = withContext(Dispatchers.IO) {
+        File(context.filesDir, name).delete()
+        Unit
     }
 
     override suspend fun listLocal(prefix: String): List<String> = withContext(Dispatchers.IO) {
@@ -94,6 +104,9 @@ class AndroidPickers(private val activity: ComponentActivity) : Pickers {
 
     private val openDoc = activity.registerForActivityResult(ActivityResultContracts.OpenDocument()) { pending?.complete(it) }
     private val createDoc = activity.registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { pending?.complete(it) }
+    private var pendingPhoto: CompletableDeferred<Boolean>? = null
+    private val takePicture = activity.registerForActivityResult(ActivityResultContracts.TakePicture()) { pendingPhoto?.complete(it) }
+    private val pickMedia = activity.registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { pending?.complete(it) }
 
     override val syncHint: String =
         "On Android, tap the menu (☰) in the file picker and choose OneDrive, Drive or Dropbox. The app for that service must be installed and signed in."
@@ -157,6 +170,60 @@ class AndroidPickers(private val activity: ComponentActivity) : Pickers {
             val text = activity.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } ?: return@withContext null
             PickedFile(displayName(uri), text)
         }
+    }
+
+    override val canTakePhoto: Boolean
+        get() = activity.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+
+    private val authority get() = "${activity.packageName}.files"
+
+    /** The camera app takes the photo into a file of ours (no camera permission needed for that). */
+    override suspend fun takeReceiptPhoto(): ByteArray? {
+        val file = withContext(Dispatchers.IO) {
+            File(activity.cacheDir, "receipts").apply { mkdirs() }.let { File(it, "receipt-photo.jpg") }.apply { delete() }
+        }
+        val uri = FileProvider.getUriForFile(activity, authority, file)
+        pendingPhoto?.cancel()
+        val done = CompletableDeferred<Boolean>().also { pendingPhoto = it }
+        try {
+            takePicture.launch(uri)
+        } catch (e: ActivityNotFoundException) {
+            error("There's no camera app to take the photo with.")
+        }
+        if (!done.await()) return null
+        return withContext(Dispatchers.IO) {
+            try {
+                AndroidReceipts.normalize(activity.contentResolver, uri)
+            } finally {
+                file.delete()
+            }
+        }
+    }
+
+    override suspend fun pickReceiptPhoto(): ByteArray? {
+        val uri = await { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } ?: return null
+        return withContext(Dispatchers.IO) { AndroidReceipts.normalize(activity.contentResolver, uri) }
+    }
+
+    override suspend fun readText(jpeg: ByteArray): List<OcrLine> = withContext(Dispatchers.Default) { AndroidReceipts.readText(jpeg) }
+
+    /** Opens the share sheet (Gmail, Outlook, Drive, Files…) with the file. */
+    override suspend fun shareFile(name: String, bytes: ByteArray, mimeType: String): String {
+        val file = withContext(Dispatchers.IO) {
+            val dir = File(activity.cacheDir, "exports").apply { mkdirs() }
+            // Only the latest export is kept.
+            dir.listFiles()?.forEach { it.delete() }
+            File(dir, name.replace('/', '-')).apply { writeBytes(bytes) }
+        }
+        val uri = FileProvider.getUriForFile(activity, authority, file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, name.substringBeforeLast('.'))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        activity.startActivity(Intent.createChooser(send, "Send $name"))
+        return "Opened the share menu for “$name”"
     }
 
     override fun syncAppName(location: SyncLocation): String? = cloudApp(location)?.first

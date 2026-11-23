@@ -63,6 +63,7 @@ enum class Screen(val label: String, val icon: ImageVector, val inNav: Boolean =
     Reports("Reports", Icons.AutoMirrored.Filled.List),
     Scheduled("Scheduled", Icons.Default.DateRange),
     Import("Import", Icons.Default.Refresh, inNav = false),
+    Expenses("Work expenses", ReceiptIcon, inNav = false),
     Settings("Settings", Icons.Default.Settings),
 }
 
@@ -128,6 +129,10 @@ class NavState {
             importAccountId?.let(::openAccount) ?: go(Screen.Accounts)
             return true
         }
+        if (screen == Screen.Expenses) {
+            go(Screen.Reports)
+            return true
+        }
         if (screen != Screen.Budget) {
             go(Screen.Budget)
             return true
@@ -160,7 +165,11 @@ fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean
                     if ((lock as? LockState.NeedsPassphrase)?.local == true) {
                         UnlockScreen(store)
                     } else {
-                        CompositionLocalProvider(LocalCreateCategory provides { name, groupId -> store.budget.addCategory(groupId, name) }) {
+                        CompositionLocalProvider(
+                            LocalCreateCategory provides { name, groupId -> store.budget.addCategory(groupId, name) },
+                            LocalPickers provides pickers,
+                            LocalStore provides store,
+                        ) {
                             MainLayout(store, pickers, nav)
                         }
                     }
@@ -214,7 +223,7 @@ private fun MainLayout(store: BudgetStore, pickers: Pickers, nav: NavState) {
                 NavigationRail(header = { RailHeader(store) }) {
                     Screen.entries.filter { it.inNav }.forEach { s ->
                         NavigationRailItem(
-                            selected = nav.screen == s || (s == Screen.Accounts && nav.screen == Screen.Import),
+                            selected = nav.screen == s || (s == Screen.Accounts && nav.screen == Screen.Import) || (s == Screen.Reports && nav.screen == Screen.Expenses),
                             onClick = { nav.go(s) },
                             icon = { Icon(s.icon, s.label) },
                             label = { Text(s.label) },
@@ -230,7 +239,7 @@ private fun MainLayout(store: BudgetStore, pickers: Pickers, nav: NavState) {
                     NavigationBar {
                         Screen.entries.filter { it.inNav }.forEach { s ->
                             NavigationBarItem(
-                                selected = nav.screen == s || (s == Screen.Accounts && nav.screen == Screen.Import),
+                                selected = nav.screen == s || (s == Screen.Accounts && nav.screen == Screen.Import) || (s == Screen.Reports && nav.screen == Screen.Expenses),
                                 onClick = { nav.go(s) },
                                 icon = { Icon(s.icon, s.label) },
                                 label = { Text(s.label, maxLines = 1) },
@@ -281,7 +290,8 @@ private fun Screens(store: BudgetStore, pickers: Pickers, nav: NavState, wide: B
             }
         }
         Screen.Goals -> GoalsScreen(store)
-        Screen.Reports -> ReportsScreen(store)
+        Screen.Reports -> ReportsScreen(store, onWorkExpenses = { nav.go(Screen.Expenses) })
+        Screen.Expenses -> ExpensesScreen(store, pickers, nav)
         Screen.Scheduled -> ScheduledScreen(store, wide)
         Screen.Import -> ImportScreen(store, pickers, nav)
         Screen.Settings -> SettingsScreen(store, pickers, nav)

@@ -1,6 +1,10 @@
 package com.z.imab.data
 
 import com.z.imab.model.BudgetData
+import com.z.imab.model.ReceiptRef
+import com.z.imab.model.Transaction
+import kotlinx.datetime.LocalDate
+import kotlin.io.encoding.Base64
 import com.z.imab.platform.Storage
 import com.z.imab.platform.SyncLocation
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +39,8 @@ data class Settings(
     val syncIntervalMinutes: Int = 5,
     /** Show the "budget isn't encrypted" reminder on every screen until a passphrase is set. */
     val encryptionReminder: Boolean = true,
+    /** Name printed on exported expense reports, remembered between exports. */
+    val expenseName: String = "",
 )
 
 sealed interface SyncStatus {
@@ -272,6 +278,12 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
             val text = storage.readLocal(name) ?: continue
             if (!Vault.isEncrypted(text)) storage.writeLocal(name, protect(text))
         }
+        // Receipt photos too, including any under the old passphrase (only this session knows that key).
+        for (name in storage.listLocal(RECEIPT_PREFIX)) {
+            val text = storage.readLocal(name) ?: continue
+            if (Vault.parse(text)?.salt == key.salt) continue
+            runCatching { reveal(text) }.onSuccess { storage.writeLocal(name, protect(it)) }
+        }
         syncNow(forceWrite = true)
     }
 
@@ -287,6 +299,12 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
 
     fun setEncryptionReminder(show: Boolean) {
         _settings.value = _settings.value.copy(encryptionReminder = show)
+        scope.launch { saveSettings() }
+    }
+
+    fun setExpenseName(name: String) {
+        if (name == _settings.value.expenseName) return
+        _settings.value = _settings.value.copy(expenseName = name)
         scope.launch { saveSettings() }
     }
 
@@ -489,6 +507,53 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
         return "$base archive ${t.year}-${two(t.monthNumber)}-${two(t.dayOfMonth)} ${two(t.hour)}${two(t.minute)}.json"
     }
 
+    // ---------------------------------------------------------------- receipts
+
+    private fun receiptFile(id: String) = "$RECEIPT_PREFIX$id.img"
+
+    /**
+     * Keeps a receipt photo in this device's storage (encrypted when the budget is) and returns the
+     * reference to save on its transaction.
+     */
+    suspend fun saveReceiptImage(jpeg: ByteArray): ReceiptRef {
+        val ref = ReceiptRef(Uuid.random().toString(), _settings.value.deviceName)
+        val text = withContext(Dispatchers.Default) { protect(Base64.encode(jpeg)) }
+        storage.writeLocal(receiptFile(ref.id), text)
+        return ref
+    }
+
+    /** The receipt photo, or null when it was taken on another device (or can't be read). */
+    suspend fun receiptImage(ref: ReceiptRef?): ByteArray? {
+        ref ?: return null
+        val text = storage.readLocal(receiptFile(ref.id)) ?: return null
+        return withContext(Dispatchers.Default) { runCatching { Base64.decode(reveal(text)) }.getOrNull() }
+    }
+
+    suspend fun deleteReceiptImage(ref: ReceiptRef?) {
+        ref?.let { storage.deleteLocal(receiptFile(it.id)) }
+    }
+
+    /** Deletes a transaction, and its receipt photo if this device has it. */
+    fun deleteTransaction(id: String) {
+        val receipt = budget.data.transactions[id]?.receipt
+        budget.deleteTransaction(id)
+        if (receipt != null) scope.launch { deleteReceiptImage(receipt) }
+    }
+
+    /**
+     * Saves a transaction. A receipt it no longer has (removed or replaced) is deleted, and the card
+     * read from its receipt is remembered on its account for the next one.
+     */
+    fun saveTransaction(t: Transaction, cardLast4: String? = null) {
+        val before = budget.data.transactions[t.id]?.receipt
+        budget.saveTransaction(t)
+        if (cardLast4 != null) budget.rememberCard(t.accountId, cardLast4)
+        if (before != null && before.id != t.receipt?.id) scope.launch { deleteReceiptImage(before) }
+    }
+
+    /** Marks work expenses as sent in for reimbursement on [date], or not sent (null). */
+    fun markSubmitted(ids: Collection<String>, date: LocalDate?) = budget.markSubmitted(ids, date)
+
     /** Saves everything and makes a last sync attempt; used when the app is closing. */
     suspend fun flush() {
         if (!ready) return
@@ -506,6 +571,8 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
     companion object {
         const val LEDGER_FILE = "ledger.json"
         const val SETTINGS_FILE = "settings.json"
+        /** Receipt photos in app storage: receipt-<id>.img. */
+        const val RECEIPT_PREFIX = "receipt-"
         /** How often to check whether a new version of the sync file has arrived. */
         const val WATCH_INTERVAL_MS = 5_000L
         const val DEFAULT_SYNC_FILE_NAME = "IMAB-budget.json"

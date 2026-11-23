@@ -4,8 +4,8 @@ import Security
 import ComposeApp
 
 /**
- * What the shared Kotlin code can't reach directly: AES-GCM from CryptoKit, and the Keychain for
- * the budget's key. The sealed format is nonce (12 bytes) + ciphertext + tag (16 bytes), the same
+ * What the shared Kotlin code can't reach directly: AES-GCM from CryptoKit, the Keychain for
+ * the budget's key, and receipt photos and text recognition. The sealed format is nonce (12 bytes) + ciphertext + tag (16 bytes), the same
  * as Android and desktop produce, so every device opens the same encrypted budget.
  */
 final class IosNativeServices: NSObject, NativeServices {
@@ -46,5 +46,21 @@ final class IosNativeServices: NSObject, NativeServices {
 
     func deleteKey() {
         SecItemDelete(query as CFDictionary)
+    }
+
+    // Receipts: see ReceiptCapture.swift.
+
+    func hasCamera() -> Bool { ReceiptCapture.hasCamera }
+
+    func captureReceipt(camera: Bool, done: @escaping (Data?, String?) -> Void) {
+        ReceiptCapture.start(camera: camera, done: done)
+    }
+
+    func recognizeText(jpeg: Data, done: @escaping (String?) -> Void) {
+        ReceiptCapture.recognizeText(jpeg, done: done)
+    }
+
+    func shareFile(path: String, done: @escaping (KotlinBoolean) -> Void) {
+        ReceiptCapture.share(path: path) { done(KotlinBoolean(value: $0)) }
     }
 }

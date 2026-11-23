@@ -99,7 +99,7 @@ private enum class PeriodMode(val label: String) {
 }
 
 @Composable
-fun ReportsScreen(store: BudgetStore) {
+fun ReportsScreen(store: BudgetStore, onWorkExpenses: (() -> Unit)? = null) {
     val data by store.data.collectAsState()
     var tab by remember { mutableStateOf(ReportTab.SPENDING) }
     // Kept while switching tabs and periods: which categories the spending report covers (null =
@@ -132,7 +132,16 @@ fun ReportsScreen(store: BudgetStore) {
     fun step(by: Int) { anchor += by }
 
     Column(Modifier.fillMaxSize()) {
-        Text("Reports", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp))
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Reports", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            if (onWorkExpenses != null) {
+                val toSubmit = data.transactions.values.count { it.workExpense && it.expenseSubmitted == null }
+                OutlinedButton(onClick = onWorkExpenses) {
+                    Icon(ReceiptIcon, null, Modifier.size(18.dp))
+                    Text(if (toSubmit > 0) "  Work expenses ($toSubmit)" else "  Work expenses")
+                }
+            }
+        }
         PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 8.dp) {
             ReportTab.entries.forEach { t -> Tab(selected = tab == t, onClick = { tab = t }, text = { Text(t.label) }) }
         }

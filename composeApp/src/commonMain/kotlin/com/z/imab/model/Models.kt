@@ -53,6 +53,11 @@ data class Account(
     /** Statement date of the last reconcile, and the balance the bank showed then. */
     val lastReconciled: LocalDate? = null,
     val reconciledBalance: Long? = null,
+    /**
+     * Last 4 digits of the cards that pay from this account, learned from scanned receipts, so the
+     * next receipt paid with that card picks this account.
+     */
+    val cardLast4: List<String> = emptyList(),
 ) {
     /**
      * Whether this account's money counts in the budget. Loans never do, even if marked otherwise:
@@ -186,12 +191,28 @@ data class Transaction(
     val splits: List<SplitLine> = emptyList(),
     /** Bank ids of duplicates merged into this one, so importing them again finds this transaction. */
     val otherImportIds: List<String> = emptyList(),
+    /** Photo of the receipt, if one was scanned or attached. */
+    val receipt: ReceiptRef? = null,
+    /** Paid for work, to be claimed back; listed under Work expenses. */
+    val workExpense: Boolean = false,
+    /** When the work expense was sent in for reimbursement (exported and marked submitted). */
+    val expenseSubmitted: LocalDate? = null,
 ) {
     val isSplit: Boolean get() = splits.isNotEmpty()
 
     /** What this transaction puts in each category: its split lines, or the whole amount in [categoryId]. */
     fun parts(): List<SplitLine> = splits.ifEmpty { listOf(SplitLine(categoryId, amount)) }
 }
+
+/**
+ * A receipt photo. The image itself stays in the app storage of the device that took it (it's too
+ * big for the budget file every device syncs); [device] names that device for the others.
+ */
+@Serializable
+data class ReceiptRef(
+    val id: String,
+    val device: String = "",
+)
 
 /** One category's share of a split transaction. */
 @Serializable

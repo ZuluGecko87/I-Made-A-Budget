@@ -5,6 +5,7 @@ import com.z.imab.platform.PickedFile
 import com.z.imab.platform.Pickers
 import com.z.imab.platform.Storage
 import com.z.imab.platform.SyncLocation
+import com.z.imab.receipt.OcrLine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.awt.FileDialog
@@ -93,6 +94,11 @@ class DesktopStorage : Storage {
 
     override suspend fun writeLocal(name: String, text: String) = withContext(Dispatchers.IO) {
         atomicWrite(File(dir, name), text)
+    }
+
+    override suspend fun deleteLocal(name: String) = withContext(Dispatchers.IO) {
+        File(dir, name).takeIf { it.isFile }?.delete()
+        Unit
     }
 
     override fun restoreSyncLocation(id: String, displayName: String): SyncLocation =
@@ -187,6 +193,35 @@ class DesktopPickers : Pickers {
         val name = dialog.file ?: return null
         val file = File(dialog.directory, name)
         return withContext(Dispatchers.IO) { PickedFile(file.name, file.readText()) }
+    }
+
+    override suspend fun pickReceiptPhoto(): ByteArray? {
+        val dialog = FileDialog(null as Frame?, "Choose a photo of the receipt", FileDialog.LOAD)
+        dialog.directory = lastReceiptFolder ?: File(home, "Downloads").takeIf { it.isDirectory }?.path ?: home.path
+        dialog.filterTo(*DesktopReceipts.imageExtensions.toTypedArray())
+        dialog.isVisible = true
+        val name = dialog.file ?: return null
+        lastReceiptFolder = dialog.directory
+        val file = File(dialog.directory, name)
+        return withContext(Dispatchers.IO) { DesktopReceipts.normalize(file) }
+    }
+
+    private var lastReceiptFolder: String? = null
+
+    override suspend fun readText(jpeg: ByteArray): List<OcrLine>? = withContext(Dispatchers.IO) { DesktopReceipts.readText(jpeg) }
+
+    /** Saves the file where the user chooses (Documents to start with). */
+    override suspend fun shareFile(name: String, bytes: ByteArray, mimeType: String): String? {
+        val dialog = FileDialog(null as Frame?, "Save $name", FileDialog.SAVE)
+        dialog.directory = File(home, "Documents").takeIf { it.isDirectory }?.path ?: home.path
+        dialog.file = name
+        dialog.isVisible = true
+        var chosen = dialog.file ?: return null
+        val ext = name.substringAfterLast('.', "")
+        if (ext.isNotEmpty() && !chosen.endsWith(".$ext", ignoreCase = true)) chosen += ".$ext"
+        val file = File(dialog.directory, chosen)
+        withContext(Dispatchers.IO) { file.writeBytes(bytes) }
+        return "Saved to ${displayPath(file)}"
     }
 
     /** Folder of the sync file, so the archive picker opens where archives are saved. */
