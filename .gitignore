@@ -13,7 +13,11 @@ captures/
 keystore.properties
 *.jks
 *.keystore
+# Mac signing and notarization (Apple ID and password)
+mac-signing.properties
 
 # iPhone build output and per-user Xcode state
 iosApp/IMAB.xcodeproj/xcuserdata/
 iosApp/IMAB.xcodeproj/project.xcworkspace/xcuserdata/
+# Apple Developer team id for signing (see iosApp/Version.xcconfig)
+iosApp/Team.xcconfig

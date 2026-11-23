@@ -310,6 +310,8 @@ the installed app, and people would have to uninstall it (their budget comes bac
 
 The Mac and Windows installers aren't signed, which is why they show a warning the first time.
 
+Publishing to Google Play and the App Store: [docs/STORE-RELEASE.md](docs/STORE-RELEASE.md).
+
 ## Security
 
 - **Encryption**: Settings → Encryption → *Set a passphrase*. Every budget file is then encrypted
@@ -323,7 +325,8 @@ The Mac and Windows installers aren't signed, which is why they show a warning t
 - **Account numbers**: bank files contain full account and card numbers. IMAB keeps only the bank's
   id and the last 4 digits (e.g. `bank-123456789-••1234`, `card-••1234`) to recognize the account.
 - IMAB uses no network itself: the budget is a file your cloud app syncs. Receipt text is read on
-  the device. It asks for no Android permissions (photos are taken by the camera app and picked with
+  the device; ML Kit's request for internet access (to send Google usage statistics) is removed from
+  the Android app. The privacy policy is [PRIVACY.md](PRIVACY.md). It asks for no Android permissions (photos are taken by the camera app and picked with
   the system photo picker), and on Android the budget is kept out of cloud backup. On iPhone it asks
   for the camera when you first scan a receipt.
 - Check every dependency (the app's and the build tools') against the OSV vulnerability database:
