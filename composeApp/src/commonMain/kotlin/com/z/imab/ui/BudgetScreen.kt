@@ -759,11 +759,22 @@ internal fun AssignDialog(
                     if (current.available < 0) {
                         StatusChip(onClick = { text = Money.toInput(current.assigned - current.available) }, label = { Text("Cover overspending") })
                     }
-                    if (goal != null && !goal.reached && goal.assignThisMonth > 0) {
-                        StatusChip(
-                            onClick = { text = Money.toInput(goal.assignThisMonth) },
-                            label = { Text("Goal: ${Money.format(goal.assignThisMonth)} this month") },
-                        )
+                    if (goal != null && !goal.reached) {
+                        // Only the difference: what's assigned already counts toward the goal.
+                        val toMeet = goal.shortfall(current.assigned)
+                        if (toMeet > 0) {
+                            StatusChip(
+                                onClick = { text = Money.toInput(current.assigned + toMeet) },
+                                label = { Text("Meet this month's goal (+${Money.format(toMeet)})") },
+                            )
+                        }
+                        // A savings goal paid off over months can also be finished now.
+                        if (!goal.isMonthly && goal.remaining > toMeet) {
+                            StatusChip(
+                                onClick = { text = Money.toInput(current.assigned + goal.remaining) },
+                                label = { Text("Reach the target now (+${Money.format(goal.remaining)})") },
+                            )
+                        }
                     }
                     if (card != null && card.coverage < 0) {
                         StatusChip(

@@ -17,6 +17,10 @@ they were made; the builds themselves said 1.0.0.
 - **Work expenses:** tick *Work expense* on a transaction, then **Reports → Work expenses** exports
   the ones to claim as a PDF report (summary table, then each receipt on its own page) or a CSV, via
   the share sheet on a phone or a save dialog on a computer, and marks them submitted.
+- **Assign just what a goal still needs:** a category's Assign dialog offers *Meet this month's goal
+  (+$…)*, which adds only the difference to what's already assigned, and for savings goals *Reach the
+  target now*. On the Goals screen, each goal that's short this month has an *Assign $… to meet it*
+  button that takes the difference from Ready to Assign.
 - **Clearer sync errors on Android:** every way of writing the sync file is tried before giving up,
   and the message says whether the cloud app refuses changes or IMAB lost access.
 - **iPhone look everywhere:** Android, Mac and Windows now look like the iPhone app should: Apple's

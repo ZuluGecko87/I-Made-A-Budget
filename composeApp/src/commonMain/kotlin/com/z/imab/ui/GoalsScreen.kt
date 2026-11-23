@@ -68,6 +68,22 @@ fun GoalsScreen(store: BudgetStore) {
     val stillNeeded = board.needs().sumOf { maxOf(0, it.wanted - it.assigned) }
     val free = BudgetMath.freeToAssign(data, month, YearMonth.of(today()))
 
+    /** A category goal, with a button that assigns just what it still needs this month from Ready to Assign. */
+    val CategoryGoalRow: @Composable (Category) -> Unit = { c ->
+        val s = board.status(c)!!
+        val cm = board.current.category(c.id)
+        val toMeet = s.shortfall(cm.assigned)
+        val give = minOf(toMeet, free)
+        GoalRow(
+            c.name, s, cm,
+            assign = if (give > 0) {
+                (if (give < toMeet) "Assign ${Money.format(give)} (all that's left)" else "Assign ${Money.format(give)} to meet it") to {
+                    store.budget.setAssigned(month, c.id, cm.assigned + give)
+                }
+            } else null,
+        ) { editingCategory = c }
+    }
+
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -104,10 +120,10 @@ fun GoalsScreen(store: BudgetStore) {
             }
         }
         goalSection("Monthly spending", "Money to have each month, like rent or groceries.", monthly) { c ->
-            GoalRow(c.name, board.status(c)!!, board.current.category(c.id)) { editingCategory = c }
+            CategoryGoalRow(c)
         }
         goalSection("Savings", "Saving up toward a total; money rolls over until you use it.", savings) { c ->
-            GoalRow(c.name, board.status(c)!!, board.current.category(c.id)) { editingCategory = c }
+            CategoryGoalRow(c)
         }
         goalSection("Across categories", "One target for the money in several categories together.", combined) { g ->
             val s = board.status(g)
@@ -162,7 +178,15 @@ private fun <T> androidx.compose.foundation.lazy.LazyListScope.goalSection(
 }
 
 @Composable
-private fun GoalRow(name: String, status: GoalStatus, month: com.z.imab.budget.CategoryMonth, subtitle: String? = null, onClick: () -> Unit) {
+private fun GoalRow(
+    name: String,
+    status: GoalStatus,
+    month: com.z.imab.budget.CategoryMonth,
+    subtitle: String? = null,
+    /** Label and action of a button that assigns what the goal still needs, if it needs any. */
+    assign: Pair<String, () -> Unit>? = null,
+    onClick: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -173,6 +197,9 @@ private fun GoalRow(name: String, status: GoalStatus, month: com.z.imab.budget.C
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             GoalProgress(status, wide = false)
+            assign?.let { (label, action) ->
+                TintedButton(onClick = action, modifier = Modifier.padding(top = 6.dp)) { Text(label) }
+            }
         }
         AvailablePill(month.available, creditOverspending = month.creditOverspent > 0 && month.cashOverspent == 0L)
     }
