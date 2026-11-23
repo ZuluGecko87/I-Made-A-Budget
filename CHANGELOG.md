@@ -17,6 +17,8 @@ they were made; the builds themselves said 1.0.0.
 - **Work expenses:** tick *Work expense* on a transaction, then **Reports → Work expenses** exports
   the ones to claim as a PDF report (summary table, then each receipt on its own page) or a CSV, via
   the share sheet on a phone or a save dialog on a computer, and marks them submitted.
+- **Clearer sync errors on Android:** every way of writing the sync file is tried before giving up,
+  and the message says whether the cloud app refuses changes or IMAB lost access.
 - **iPhone look everywhere:** Android, Mac and Windows now look like the iPhone app should: Apple's
   system colors and type sizes, lists in white rounded groups on a grey background, large titles,
   "‹ Back" links, an iOS tab bar on phones and a sidebar on computers and tablets, plain blue text

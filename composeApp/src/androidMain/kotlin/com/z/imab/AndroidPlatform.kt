@@ -10,6 +10,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
@@ -84,17 +85,51 @@ class AndroidStorage(private val context: Context) : Storage {
     override suspend fun writeSync(location: SyncLocation, text: String): Unit = withContext(Dispatchers.IO) {
         val uri = Uri.parse(location.id)
         val bytes = text.encodeToByteArray()
-        // Not every cloud provider honours the truncating modes, so also cut the file to length
-        // ourselves; otherwise a shorter write leaves the end of the old file behind.
-        val pfd = listOf("rwt", "wt", "w").firstNotNullOfOrNull { mode ->
-            runCatching { context.contentResolver.openFileDescriptor(uri, mode) }.getOrNull()
-        } ?: error("Can't write the sync file.")
-        ParcelFileDescriptor.AutoCloseOutputStream(pfd).use { out ->
-            runCatching { out.channel.truncate(0) }
-            out.write(bytes)
-            out.flush()
-            runCatching { out.channel.truncate(bytes.size.toLong()) }
+        // Cloud providers differ in which modes they honour, and some (OneDrive) hand back a file
+        // that opens in a mode but can't then be written ("EBADF"). So each way of writing is
+        // tried in turn until one works, and the error says what each one did if none does.
+        val failures = mutableListOf<String>()
+        for (mode in listOf("rwt", "wt", "w")) {
+            val pfd = runCatching { context.contentResolver.openFileDescriptor(uri, mode) }
+                .getOrElse { failures += "$mode: ${it.message}"; null } ?: continue
+            val written = runCatching {
+                ParcelFileDescriptor.AutoCloseOutputStream(pfd).use { out ->
+                    // Not every provider truncates, so cut the file to length ourselves too;
+                    // otherwise a shorter write leaves the end of the old file behind.
+                    runCatching { out.channel.truncate(0) }
+                    out.write(bytes)
+                    out.flush()
+                    runCatching { out.channel.truncate(bytes.size.toLong()) }
+                }
+            }
+            if (written.isSuccess) return@withContext
+            failures += "$mode: ${written.exceptionOrNull()?.message}"
         }
+        // Last, a plain stream, which providers that stream uploads through a pipe always accept.
+        for (mode in listOf("wt", "w")) {
+            val written = runCatching {
+                (context.contentResolver.openOutputStream(uri, mode) ?: error("no stream")).use { it.write(bytes); it.flush() }
+            }
+            if (written.isSuccess) return@withContext
+            failures += "stream $mode: ${written.exceptionOrNull()?.message}"
+        }
+        // Whether the cloud app says the file can be changed, and whether IMAB still has write access.
+        val supportsWrite = runCatching {
+            context.contentResolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_FLAGS), null, null, null)?.use { c ->
+                if (c.moveToFirst()) (c.getInt(0) and DocumentsContract.Document.FLAG_SUPPORTS_WRITE) != 0 else null
+            }
+        }.getOrNull()
+        val granted = context.contentResolver.persistedUriPermissions.firstOrNull { it.uri == uri }?.isWritePermission
+        Log.w("IMAB", "Couldn't write the sync file: ${failures.joinToString("; ")}; supportsWrite=$supportsWrite granted=$granted")
+        error(
+            when {
+                granted == false -> "IMAB no longer has permission to change the sync file. Choose it again with \"Use existing sync file\"."
+                supportsWrite == false -> "The cloud app says this sync file can't be changed (it may be read-only, shared with you, or locked). " +
+                    "Check it in the cloud app, or choose another file."
+                else -> "The cloud app wouldn't save the sync file (${failures.last()}). Open the cloud app to check it's signed in, " +
+                    "then choose the file again with \"Use existing sync file\"."
+            }
+        )
     }
 }
 
