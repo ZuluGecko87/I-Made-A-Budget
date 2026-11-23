@@ -21,6 +21,10 @@ they were made; the builds themselves said 1.0.0.
   (+$…)*, which adds only the difference to what's already assigned, and for savings goals *Reach the
   target now*. On the Goals screen, each goal that's short this month has an *Assign $… to meet it*
   button that takes the difference from Ready to Assign.
+- **Ready for the app stores:** Android targets API 36 and builds a Google Play bundle; the Android app
+  no longer includes the internet permission ML Kit adds (its usage statistics can't be sent); the
+  iPhone app has Apple's privacy manifest; the Mac download can be signed and notarized. A privacy
+  policy (PRIVACY.md) and a publishing checklist (docs/STORE-RELEASE.md).
 - **Clearer sync errors on Android:** every way of writing the sync file is tried before giving up,
   and the message says whether the cloud app refuses changes or IMAB lost access.
 - **iPhone look everywhere:** Android, Mac and Windows now look like the iPhone app should: Apple's

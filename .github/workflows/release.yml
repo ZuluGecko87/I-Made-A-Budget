@@ -9,6 +9,16 @@
 #   IMAB_KEY_ALIAS
 #   IMAB_KEY_PASSWORD
 #
+# Mac signing and notarization are optional; with these secrets the .dmg is signed with a Developer ID
+# and notarized, so it opens without "Open Anyway":
+#   IMAB_MAC_CERT_P12_BASE64   the "Developer ID Application" certificate and key (.p12), base64-encoded
+#   IMAB_MAC_CERT_PASSWORD     the .p12's password
+#   IMAB_MAC_SIGN_IDENTITY     the name after "Developer ID Application: ", e.g. "Jane Doe (AB12CD34EF)"
+#   IMAB_NOTARY_APPLE_ID, IMAB_NOTARY_PASSWORD (an app-specific password), IMAB_TEAM_ID
+#
+# The Android job also builds the Google Play bundle (.aab, signed with the same key as the upload
+# key); it's kept as the "android-play" artifact of the run, not attached to the release.
+#
 # Hardening: actions are pinned to full commit SHAs (the tag is in the comment), jobs get read-only
 # access except the one that publishes, and release builds don't use caches, so nothing from an
 # earlier run can affect what gets signed and published.
@@ -92,16 +102,21 @@ jobs:
           IMAB_KEY_ALIAS: ${{ secrets.IMAB_KEY_ALIAS }}
           IMAB_KEY_PASSWORD: ${{ secrets.IMAB_KEY_PASSWORD }}
         run: |
-          ./gradlew --no-daemon --no-build-cache :composeApp:assembleRelease
+          ./gradlew --no-daemon --no-build-cache :composeApp:assembleRelease :composeApp:bundleRelease
           rm -f "$IMAB_KEYSTORE_FILE"
       - name: Rename
         run: |
-          mkdir out
+          mkdir out play
           cp composeApp/build/outputs/apk/release/composeApp-release.apk "out/IMAB-${{ needs.version.outputs.version }}-android.apk"
+          cp composeApp/build/outputs/bundle/release/composeApp-release.aab "play/IMAB-${{ needs.version.outputs.version }}-play.aab"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android
           path: out/*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-play
+          path: play/*
 
   mac:
     needs: [version, audit]
@@ -119,8 +134,36 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Signing certificate
+        env:
+          IMAB_MAC_CERT_P12_BASE64: ${{ secrets.IMAB_MAC_CERT_P12_BASE64 }}
+          IMAB_MAC_CERT_PASSWORD: ${{ secrets.IMAB_MAC_CERT_PASSWORD }}
+        run: |
+          if [ -z "$IMAB_MAC_CERT_P12_BASE64" ]; then echo "No Mac certificate: the .dmg won't be signed."; exit 0; fi
+          keychain="$RUNNER_TEMP/imab.keychain-db"
+          kcpass=$(openssl rand -hex 16)
+          echo "$IMAB_MAC_CERT_P12_BASE64" | base64 -d > "$RUNNER_TEMP/imab.p12"
+          security create-keychain -p "$kcpass" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$kcpass" "$keychain"
+          security import "$RUNNER_TEMP/imab.p12" -k "$keychain" -P "$IMAB_MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpass" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/imab.p12"
+          echo "IMAB_SIGNED=1" >> "$GITHUB_ENV"
       - name: Build
-        run: ./gradlew --no-daemon --no-build-cache :composeApp:packageDmg
+        env:
+          IMAB_MAC_SIGN_IDENTITY: ${{ secrets.IMAB_MAC_SIGN_IDENTITY }}
+          IMAB_NOTARY_APPLE_ID: ${{ secrets.IMAB_NOTARY_APPLE_ID }}
+          IMAB_NOTARY_PASSWORD: ${{ secrets.IMAB_NOTARY_PASSWORD }}
+          IMAB_TEAM_ID: ${{ secrets.IMAB_TEAM_ID }}
+        run: |
+          if [ "$IMAB_SIGNED" = "1" ]; then
+            ./gradlew --no-daemon --no-build-cache :composeApp:notarizeDmg
+          else
+            unset IMAB_MAC_SIGN_IDENTITY
+            ./gradlew --no-daemon --no-build-cache :composeApp:packageDmg
+          fi
       - name: Rename
         run: |
           mkdir out

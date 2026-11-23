@@ -2,3 +2,7 @@
 // `./gradlew :composeApp:syncIosVersion`, which the release build runs.
 IMAB_VERSION_NAME = 1.15.0
 IMAB_VERSION_CODE = 24
+
+// Your Apple Developer team, for signing App Store builds: put `DEVELOPMENT_TEAM = AB12CD34EF`
+// (Membership details at developer.apple.com/account) in Team.xcconfig, which git ignores.
+#include? "Team.xcconfig"

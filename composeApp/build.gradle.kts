@@ -13,6 +13,24 @@ plugins {
 val appVersionName = providers.gradleProperty("imab.versionName").get()
 val appVersionCode = providers.gradleProperty("imab.versionCode").get().toInt()
 
+/**
+ * Mac signing and notarization, from the environment (CI) or a git-ignored mac-signing.properties:
+ * IMAB_MAC_SIGN_IDENTITY (the certificate's name after "Developer ID Application: "), and for
+ * notarization IMAB_NOTARY_APPLE_ID, IMAB_NOTARY_PASSWORD (an app-specific password) and IMAB_TEAM_ID.
+ */
+val macSigning: Map<String, String>? = run {
+    val local = rootProject.file("mac-signing.properties").takeIf { it.isFile }
+        ?.let { f -> Properties().apply { f.inputStream().use { load(it) } } }
+    fun get(env: String, key: String) = System.getenv(env)?.takeIf { it.isNotBlank() } ?: local?.getProperty(key)
+    val identity = get("IMAB_MAC_SIGN_IDENTITY", "identity") ?: return@run null
+    buildMap {
+        put("identity", identity)
+        get("IMAB_NOTARY_APPLE_ID", "appleId")?.let { put("appleId", it) }
+        get("IMAB_NOTARY_PASSWORD", "password")?.let { put("password", it) }
+        get("IMAB_TEAM_ID", "teamId")?.let { put("teamId", it) }
+    }
+}
+
 /** Writes BuildInfo.kt so the app can show its version. */
 val generateBuildInfo by tasks.registering {
     val out = layout.buildDirectory.dir("generated/buildinfo")
@@ -136,12 +154,12 @@ val releaseSigning: Map<String, String>? = run {
 
 android {
     namespace = "com.z.imab"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.z.imab"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
     }
@@ -198,6 +216,21 @@ compose.desktop {
                 bundleID = "com.z.imab"
                 iconFile.set(project.file("icons/IMAB.icns"))
                 appCategory = "public.app-category.finance"
+                // Signed with a "Developer ID Application" certificate and notarized by Apple when these
+                // are set, so macOS opens the app without "Open Anyway". Unset, the .dmg is unsigned.
+                macSigning?.let { m ->
+                    signing {
+                        sign.set(true)
+                        identity.set(m.getValue("identity"))
+                    }
+                    if (m["appleId"] != null) {
+                        notarization {
+                            appleID.set(m.getValue("appleId"))
+                            password.set(m.getValue("password"))
+                            teamID.set(m.getValue("teamId"))
+                        }
+                    }
+                }
             }
         }
     }
