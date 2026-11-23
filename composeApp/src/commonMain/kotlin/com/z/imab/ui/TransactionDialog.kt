@@ -13,9 +13,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -189,11 +187,11 @@ private fun TxnFields(form: TxnForm, data: BudgetData, dateLabel: String, split:
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        FilterChip(selected = form.outflow, onClick = { form.outflow = true }, label = { Text("Outflow") })
-        FilterChip(selected = !form.outflow, onClick = { form.outflow = false }, label = { Text("Inflow") })
+        ChoiceChip(selected = form.outflow, onClick = { form.outflow = true }, label = { Text("Outflow") })
+        ChoiceChip(selected = !form.outflow, onClick = { form.outflow = false }, label = { Text("Inflow") })
     }
     MoneyField("Amount", form.amountText, { form.amountText = it }, Modifier.fillMaxWidth(), isError = form.amountText.isNotEmpty() && Money.parse(form.amountText) == null)
-    OutlinedTextField(form.memo, { form.memo = it }, label = { Text("Memo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    InputField(form.memo, { form.memo = it }, label = { Text("Memo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     if (split?.active == true) SplitLines(split, form, data)
 }
 
@@ -471,7 +469,7 @@ fun AccountDialog(
         title = { Text(if (initial == null) "Add account" else "Edit account") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                InputField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Picker("Type", AccountType.entries.map { PickerOption(it, it.label) }, type, {
                     // Pick a sensible default when the type changes; investments are usually tracked.
                     if (it == AccountType.INVESTMENT) onBudget = false
@@ -480,8 +478,8 @@ fun AccountDialog(
                 }, Modifier.fillMaxWidth())
                 // Budget vs tracking, as an explicit choice. Loans and mortgages are always tracking.
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(onBudget && !isLoan, { onBudget = true }, enabled = !isLoan, label = { Text("Budget account") })
-                    FilterChip(!onBudget || isLoan, { onBudget = false }, label = { Text("Tracking account") })
+                    ChoiceChip(onBudget && !isLoan, { onBudget = true }, enabled = !isLoan, label = { Text("Budget account") })
+                    ChoiceChip(!onBudget || isLoan, { onBudget = false }, label = { Text("Tracking account") })
                 }
                 Text(
                     when {
@@ -510,7 +508,7 @@ fun AccountDialog(
                         "Used to split each payment into interest, escrow and principal.",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    OutlinedTextField(
+                    InputField(
                         rateText, { rateText = it },
                         label = { Text("Interest rate (% per year)") },
                         placeholder = { Text("e.g. 6.25") },

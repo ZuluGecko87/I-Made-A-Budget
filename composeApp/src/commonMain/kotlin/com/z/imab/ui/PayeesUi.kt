@@ -11,14 +11,12 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,7 +57,7 @@ fun PayeesCard(data: BudgetData, budget: Budget) {
                     "transaction — e.g. to fix a misspelling. Renaming to a name that already exists merges them.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            OutlinedTextField(
+            InputField(
                 query, { query = it; page = 0 },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 placeholder = { Text("Search ${data.payees.size} payees") },
@@ -86,7 +84,7 @@ fun PayeesCard(data: BudgetData, budget: Budget) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Per page", style = MaterialTheme.typography.bodySmall)
                     PAGE_SIZES.forEach { n ->
-                        FilterChip(pageSize == n, { pageSize = n; page = 0 }, label = { Text("$n") })
+                        ChoiceChip(pageSize == n, { pageSize = n; page = 0 }, label = { Text("$n") })
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {

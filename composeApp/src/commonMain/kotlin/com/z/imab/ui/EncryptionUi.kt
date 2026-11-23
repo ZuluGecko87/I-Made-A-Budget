@@ -1,5 +1,10 @@
 package com.z.imab.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +24,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,7 +52,7 @@ private const val NO_RECOVERY =
 
 @Composable
 private fun PassphraseField(value: String, onChange: (String) -> Unit, label: String, onDone: (() -> Unit)? = null) {
-    OutlinedTextField(
+    InputField(
         value, onChange,
         label = { Text(label) },
         singleLine = true,
@@ -158,12 +161,13 @@ fun EncryptionBanner(store: BudgetStore, onSetUp: () -> Unit) {
     val syncLocked = (lock as? LockState.NeedsPassphrase)?.local == false
     when {
         syncLocked -> BannerCard(
-            "Your synced budget is encrypted with a passphrase this device doesn't have yet. Enter it to keep syncing.",
+            "Enter your passphrase to keep syncing",
+            "Another device encrypted your synced budget with a passphrase this device doesn't have yet.",
             "Enter passphrase",
         ) { asking = true }
         !encrypted && settings.encryptionReminder -> BannerCard(
-            "Your budget file isn't encrypted. Set a passphrase so it can't be read by anyone with access to your " +
-                "cloud storage. Dismiss to stop this reminder (Settings → Encryption brings it back).",
+            "Your budget file isn't encrypted",
+            "Set a passphrase so no one with access to your cloud storage can read it. Settings → Encryption brings this reminder back.",
             "Set passphrase",
             onDismiss = { store.setEncryptionReminder(false) },
         ) { onSetUp() }
@@ -180,20 +184,21 @@ fun EncryptionBanner(store: BudgetStore, onSetUp: () -> Unit) {
 }
 
 @Composable
-private fun BannerCard(text: String, action: String, onDismiss: (() -> Unit)? = null, onAction: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
-                Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+private fun BannerCard(title: String, text: String, action: String, onDismiss: (() -> Unit)? = null, onAction: () -> Unit) {
+    // A quiet notice in the iOS style: a white card with an orange lock, and plain text buttons.
+    Group(Modifier.padding(top = 8.dp)) {
+        Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)).background(Ios.orangeFill), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Lock, null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                onDismiss?.let { TextButton(onClick = it) { Text("Dismiss") } }
-                Button(onClick = onAction) { Text(action) }
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+        Row(Modifier.fillMaxWidth().padding(end = 4.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            onDismiss?.let { TextButton(onClick = it) { Text("Dismiss", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+            TextButton(onClick = onAction) { Text(action, fontWeight = FontWeight.SemiBold) }
         }
     }
 }
@@ -222,7 +227,7 @@ fun EncryptionCard(store: BudgetStore, openSetUp: Boolean = false, onSetUpShown:
                         "This device can't store the key securely, so the passphrase is asked each time IMAB opens.",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                OutlinedButton(onClick = { setting = true }) { Text("Change passphrase…") }
+                TintedButton(onClick = { setting = true }) { Text("Change passphrase…") }
             } else {
                 Text(
                     "Your budget files aren't encrypted: anyone who can open your OneDrive, Google Drive or Dropbox can read them. " +
@@ -232,7 +237,7 @@ fun EncryptionCard(store: BudgetStore, openSetUp: Boolean = false, onSetUpShown:
                 Button(onClick = { setting = true }) { Text("Set a passphrase…") }
                 val settings by store.settings.collectAsState()
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Switch(settings.encryptionReminder, { store.setEncryptionReminder(it) })
+                    IosSwitch(settings.encryptionReminder, { store.setEncryptionReminder(it) })
                     Text("Remind me on every screen until it's encrypted", style = MaterialTheme.typography.bodyMedium)
                 }
             }

@@ -24,8 +24,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Card
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -116,7 +115,7 @@ fun ScanReceiptButton(
         if (iconOnly) {
             IconButton(onClick = onClick) { Icon(ReceiptIcon, "Scan receipt") }
         } else {
-            OutlinedButton(onClick = onClick) {
+            TintedButton(onClick = onClick) {
                 Icon(ReceiptIcon, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Scan receipt")
@@ -165,7 +164,7 @@ fun ScanReceiptButton(
 @Composable
 internal fun ScanSummary(scan: PendingReceipt, accountId: String, data: BudgetData) {
     val s = scan.draft.scan
-    OutlinedCard(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             when {
                 !scan.textRead -> Text("Text recognition isn't available on this device. Fill in the details from the photo.", style = MaterialTheme.typography.bodySmall)

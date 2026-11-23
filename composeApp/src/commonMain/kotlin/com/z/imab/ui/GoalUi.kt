@@ -34,7 +34,6 @@ import com.z.imab.model.Category
 import com.z.imab.model.Money
 import com.z.imab.model.CategoryGoal
 import com.z.imab.model.GoalType
-import androidx.compose.material3.FilterChip
 import com.z.imab.model.YearMonth
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
@@ -126,8 +125,8 @@ fun GoalDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(!isMonthly, { type = GoalType.SAVINGS }, label = { Text("Savings goal") })
-                    FilterChip(isMonthly, { type = GoalType.MONTHLY_SPENDING }, label = { Text("Monthly spending") })
+                    ChoiceChip(!isMonthly, { type = GoalType.SAVINGS }, label = { Text("Savings goal") })
+                    ChoiceChip(isMonthly, { type = GoalType.MONTHLY_SPENDING }, label = { Text("Monthly spending") })
                 }
                 Text(
                     if (isMonthly) {

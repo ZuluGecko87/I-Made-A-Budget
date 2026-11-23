@@ -13,7 +13,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -86,8 +85,8 @@ fun ReconcileDialog(
                 )
                 if (debt) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(owed, { owed = true }, label = { Text("Amount owed") })
-                        FilterChip(!owed, { owed = false }, label = { Text("In credit") })
+                        ChoiceChip(owed, { owed = true }, label = { Text("Amount owed") })
+                        ChoiceChip(!owed, { owed = false }, label = { Text("In credit") })
                     }
                 }
 

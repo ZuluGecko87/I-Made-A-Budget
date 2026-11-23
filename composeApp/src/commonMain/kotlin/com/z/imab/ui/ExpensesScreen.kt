@@ -17,13 +17,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -103,9 +100,7 @@ fun ExpensesScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { nav.go(Screen.Reports) }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-            Text("Work expenses", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+        BackBar("Reports", onBack = { nav.go(Screen.Reports) }, title = "Work expenses") {
             ScanReceiptButton(store, fallbackAccountId = { null }, iconOnly = true, workExpense = true)
         }
         FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -115,7 +110,7 @@ fun ExpensesScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
                     ExpenseFilter.SUBMITTED -> all.count { it.expenseSubmitted != null }
                     ExpenseFilter.ALL -> all.size
                 }
-                FilterChip(filter == f, { filter = f }, label = { Text("${f.label} ($count)") })
+                ChoiceChip(filter == f, { filter = f }, label = { Text("${f.label} ($count)") })
             }
         }
         if (all.isEmpty()) {
@@ -170,7 +165,7 @@ fun ExpensesScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
             HorizontalDivider()
             FlowRow(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { exporting = ExportFormat.PDF }, enabled = picked.isNotEmpty() && !busy) { Text(if (busy) "Exporting…" else "Export PDF") }
-                OutlinedButton(onClick = { exporting = ExportFormat.CSV }, enabled = picked.isNotEmpty() && !busy) { Text("Export CSV") }
+                TintedButton(onClick = { exporting = ExportFormat.CSV }, enabled = picked.isNotEmpty() && !busy) { Text("Export CSV") }
                 val submitted = picked.filter { it.expenseSubmitted != null }
                 val notSubmitted = picked.filter { it.expenseSubmitted == null }
                 if (notSubmitted.isNotEmpty()) {
@@ -193,8 +188,8 @@ fun ExpensesScreen(store: BudgetStore, pickers: Pickers, nav: NavState) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("${format.label} · ${Money.format(ExpenseReport.total(picked))}", style = MaterialTheme.typography.bodyMedium)
                     if (format == ExportFormat.PDF) {
-                        OutlinedTextField(title, { title = it }, label = { Text("Report title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(name, { name = it }, label = { Text("Your name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        InputField(title, { title = it }, label = { Text("Report title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        InputField(name, { name = it }, label = { Text("Your name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         val elsewhere = picked.count { it.receipt != null && it.receipt.device.isNotBlank() && it.receipt.device != settings.deviceName }
                         Text(
                             "A summary table, then each receipt on its own page." +

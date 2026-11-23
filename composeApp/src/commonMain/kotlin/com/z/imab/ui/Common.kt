@@ -31,8 +31,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,66 +61,9 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 
-/** Light blue accents on cool greys. Amber stays for credit overspending, red for cash overspending. */
-val LightColors = lightColorScheme(
-    primary = Color(0xFF2F6FA8),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFD3E6F8),
-    onPrimaryContainer = Color(0xFF0B3556),
-    secondary = Color(0xFF5F6B76),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE1E6EB),
-    onSecondaryContainer = Color(0xFF1C252D),
-    tertiary = Color(0xFF7A5900),
-    tertiaryContainer = Color(0xFFFFDEA6),
-    onTertiaryContainer = Color(0xFF261900),
-    error = Color(0xFFB3261E),
-    errorContainer = Color(0xFFF9DEDC),
-    background = Color(0xFFF4F7FA),
-    onBackground = Color(0xFF1A1F24),
-    surface = Color(0xFFF4F7FA),
-    onSurface = Color(0xFF1A1F24),
-    surfaceVariant = Color(0xFFE3E8ED),
-    onSurfaceVariant = Color(0xFF47515A),
-    surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFEEF2F6),
-    surfaceContainer = Color(0xFFE8EDF2),
-    surfaceContainerHigh = Color(0xFFE2E8EE),
-    surfaceContainerHighest = Color(0xFFDCE3EA),
-    outline = Color(0xFF77818B),
-    outlineVariant = Color(0xFFC5CDD4),
-)
-
-val DarkColors = darkColorScheme(
-    primary = Color(0xFF9CCBF5),
-    onPrimary = Color(0xFF003256),
-    primaryContainer = Color(0xFF1E4A70),
-    onPrimaryContainer = Color(0xFFD3E6F8),
-    secondary = Color(0xFFBAC4CE),
-    onSecondary = Color(0xFF242E37),
-    secondaryContainer = Color(0xFF3E4851),
-    onSecondaryContainer = Color(0xFFDDE3E9),
-    tertiary = Color(0xFFF3BF48),
-    tertiaryContainer = Color(0xFF5C4200),
-    onTertiaryContainer = Color(0xFFFFDEA6),
-    background = Color(0xFF121518),
-    onBackground = Color(0xFFE1E5E9),
-    surface = Color(0xFF121518),
-    onSurface = Color(0xFFE1E5E9),
-    surfaceVariant = Color(0xFF2C3237),
-    onSurfaceVariant = Color(0xFFC2C9D0),
-    surfaceContainerLowest = Color(0xFF0D1013),
-    surfaceContainerLow = Color(0xFF171B1F),
-    surfaceContainer = Color(0xFF1B1F23),
-    surfaceContainerHigh = Color(0xFF23282D),
-    surfaceContainerHighest = Color(0xFF2C3237),
-    outline = Color(0xFF8C959E),
-    outlineVariant = Color(0xFF42494F),
-)
-
 object Amounts {
-    val positive = Color(0xFF2E7D32)
-    val positiveDark = Color(0xFF81C784)
+    val positive = Ios.green
+    val positiveDark = Ios.greenDark
 }
 
 fun today(): LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
@@ -142,18 +83,20 @@ private fun Color.luminanceIsDark() = (red * 0.299f + green * 0.587f + blue * 0.
 /** Rounded "available" pill: green when funded, red when overspent in cash, amber when overspent on credit. */
 @Composable
 fun AvailablePill(cents: Long, modifier: Modifier = Modifier, creditOverspending: Boolean = false) {
+    val dark = MaterialTheme.colorScheme.background.luminanceIsDark()
     val (bg, fg) = when {
-        cents > 0 -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        cents > 0 -> (if (dark) Ios.greenDark else Ios.green).let { it.copy(alpha = 0.14f) to it }
         // Overspent on a credit card: becomes card debt instead of coming out of next month.
-        cents < 0 && creditOverspending -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-        cents < 0 -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        cents < 0 && creditOverspending -> (if (dark) Ios.orangeDark else Ios.orange).let { it.copy(alpha = 0.14f) to it }
+        cents < 0 -> MaterialTheme.colorScheme.error.let { it.copy(alpha = 0.12f) to it }
         else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(color = bg, shape = RoundedCornerShape(50), modifier = modifier) {
         Text(
             Money.format(cents),
             color = fg,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
             maxLines = 1,
         )
@@ -195,7 +138,7 @@ private fun <T> PickerDialog(
         title = { Text(title) },
         text = {
             Column {
-                OutlinedTextField(
+                InputField(
                     query, { query = it },
                     placeholder = { Text("Search") },
                     singleLine = true,
@@ -256,23 +199,12 @@ fun <T> Picker(
     modifier: Modifier = Modifier,
     createLabel: String? = null,
     onCreate: ((query: String) -> Unit)? = null,
-    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    @Suppress("UNUSED_PARAMETER") contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
 ) {
     var open by remember { mutableStateOf(false) }
     val current = options.firstOrNull { !it.isHeader && it.value == selected }?.label ?: "Choose…"
     Box(modifier) {
-        OutlinedButton(
-            onClick = { open = true },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(6.dp),
-            contentPadding = contentPadding,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(current, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
-            }
-            Icon(Icons.Default.ArrowDropDown, null)
-        }
+        FormRow(label, current, onClick = { open = true }, modifier = Modifier.fillMaxWidth())
         // Long lists open as a dialog with search: a dropdown can run under the phone's navigation
         // bar, leaving its last items out of reach.
         if (open && options.count { !it.isHeader } > LONG_LIST) {
@@ -396,7 +328,7 @@ fun NewCategoryDialog(data: BudgetData, initialName: String, onDismiss: () -> Un
         title = { Text("New category") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                InputField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Picker("Group", data.sortedGroups.map { PickerOption(it.id, it.name) }, groupId, { groupId = it }, Modifier.fillMaxWidth())
             }
         },
@@ -410,12 +342,7 @@ fun NewCategoryDialog(data: BudgetData, initialName: String, onDismiss: () -> Un
 @Composable
 fun DateField(label: String, date: LocalDate, onChange: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
-    OutlinedButton(onClick = { open = true }, modifier = modifier, shape = RoundedCornerShape(6.dp)) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(date.toString(), color = MaterialTheme.colorScheme.onSurface)
-        }
-    }
+    FormRow(label, com.z.imab.receipt.ExpenseReport.formatDate(date), onClick = { open = true }, modifier = modifier, chevron = false)
     if (open) {
         val state = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds())
         DatePickerDialog(
@@ -449,7 +376,7 @@ fun MoneyField(
     result: Long? = null,
 ) {
     val showResult = result != null && Money.isExpression(value)
-    OutlinedTextField(
+    InputField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
@@ -475,7 +402,7 @@ fun TextInputDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            OutlinedTextField(text, { text = it }, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            InputField(text, { text = it }, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth())
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(text.trim()) }, enabled = text.isNotBlank()) { Text(confirm) }
@@ -498,19 +425,8 @@ fun ConfirmDialog(title: String, message: String, confirm: String = "Delete", on
 }
 
 @Composable
-fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) {
-    Column(modifier) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            trailing()
-        }
-        HorizontalDivider()
-    }
-}
+fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) =
+    GroupHeader(text, modifier, trailing)
 
 /**
  * Payee chooser: a button that opens a pop-up with a search box, so the keyboard doesn't cover the
@@ -519,18 +435,7 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Compos
 @Composable
 fun PayeeField(value: String, onChange: (String) -> Unit, data: BudgetData, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
-    OutlinedButton(onClick = { open = true }, modifier = modifier, shape = RoundedCornerShape(6.dp)) {
-        Column(Modifier.weight(1f)) {
-            Text("Payee", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                value.ifBlank { "Choose or add a payee" },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = if (value.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Icon(Icons.Default.ArrowDropDown, null)
-    }
+    FormRow("Payee", value.ifBlank { "Choose or add a payee" }, onClick = { open = true }, modifier = modifier, placeholder = value.isBlank())
     if (open) PayeeDialog(value, data, onPick = { onChange(it); open = false }, onDismiss = { open = false })
 }
 
@@ -547,7 +452,7 @@ private fun PayeeDialog(current: String, data: BudgetData, onPick: (String) -> U
         title = { Text("Payee") },
         text = {
             Column {
-                OutlinedTextField(
+                InputField(
                     query, { query = it },
                     placeholder = { Text("Search or type a new payee") },
                     singleLine = true,

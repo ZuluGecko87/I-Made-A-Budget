@@ -10,7 +10,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -126,11 +125,11 @@ fun StartOverCard(store: BudgetStore, pickers: Pickers) {
                 style = MaterialTheme.typography.bodySmall,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = !busy, onClick = { confirming = Reset.FRESH }) { Text("Fresh start…") }
-                OutlinedButton(enabled = !busy, onClick = { understood = false; confirming = Reset.SCRATCH }) {
+                TintedButton(enabled = !busy, onClick = { confirming = Reset.FRESH }) { Text("Fresh start…") }
+                TintedButton(enabled = !busy, onClick = { understood = false; confirming = Reset.SCRATCH }) {
                     Text("Start from scratch…", color = MaterialTheme.colorScheme.error)
                 }
-                OutlinedButton(enabled = !busy, onClick = {
+                TintedButton(enabled = !busy, onClick = {
                     scope.launch { pickers.pickArchive()?.let { pickRestore(it.name, it.text) } }
                 }) { Text("Restore from archive…") }
             }

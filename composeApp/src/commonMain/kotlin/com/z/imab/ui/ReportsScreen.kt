@@ -16,7 +16,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -39,11 +38,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryScrollableTabRow
-import androidx.compose.material3.Tab
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -133,17 +130,21 @@ fun ReportsScreen(store: BudgetStore, onWorkExpenses: (() -> Unit)? = null) {
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Reports", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            Text("Reports", style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
             if (onWorkExpenses != null) {
                 val toSubmit = data.transactions.values.count { it.workExpense && it.expenseSubmitted == null }
-                OutlinedButton(onClick = onWorkExpenses) {
+                TintedButton(onClick = onWorkExpenses) {
                     Icon(ReceiptIcon, null, Modifier.size(18.dp))
                     Text(if (toSubmit > 0) "  Work expenses ($toSubmit)" else "  Work expenses")
                 }
             }
         }
-        PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 8.dp) {
-            ReportTab.entries.forEach { t -> Tab(selected = tab == t, onClick = { tab = t }, text = { Text(t.label) }) }
+        // The reports, as a row of capsules that scrolls sideways on a phone.
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ReportTab.entries.forEach { t -> ChoiceChip(tab == t, { tab = t }, label = { Text(t.label) }) }
         }
         // One time control above everything it scopes: what kind of period, then which one. The
         // menus have fixed widths on every platform; if text is set large, the ‹ period › control
@@ -578,7 +579,7 @@ private fun SpendingReportView(
     var choosing by remember { mutableStateOf(false) }
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { choosing = true }) {
+        TintedButton(onClick = { choosing = true }) {
             Text(
                 when {
                     only == null -> "All categories"
@@ -616,8 +617,8 @@ private fun SpendingReportView(
         }
         ChartTitle(if (byGroup) "Spending by category group" else "Spending by category", "Net of refunds; transfers and card payments aren't spending.")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            FilterChip(!byGroup, { byGroup = false }, label = { Text("Categories") })
-            FilterChip(byGroup, { byGroup = true }, label = { Text("Groups") })
+            ChoiceChip(!byGroup, { byGroup = false }, label = { Text("Categories") })
+            ChoiceChip(byGroup, { byGroup = true }, label = { Text("Groups") })
             Spacer(Modifier.width(8.dp))
             ChartStyleChips(pie, onPie)
         }
@@ -638,8 +639,8 @@ private fun SpendingReportView(
 /** Bars or pie for a breakdown. */
 @Composable
 private fun ChartStyleChips(pie: Boolean, onPie: (Boolean) -> Unit) {
-    FilterChip(!pie, { onPie(false) }, label = { Text("Bars") })
-    FilterChip(pie, { onPie(true) }, label = { Text("Pie") })
+    ChoiceChip(!pie, { onPie(false) }, label = { Text("Bars") })
+    ChoiceChip(pie, { onPie(true) }, label = { Text("Pie") })
 }
 
 /**

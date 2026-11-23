@@ -14,8 +14,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -102,7 +100,7 @@ private fun RuleDialog(
         title = { Text(if (initial == null) "New rule" else "Edit rule") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                InputField(
                     match, { match = it },
                     label = { Text("When the payee contains") },
                     supportingText = { Text("Words only; numbers and symbols are ignored. e.g. main street mortgage") },
@@ -167,7 +165,7 @@ fun LoanSummary(account: Account, data: BudgetData, onPlan: () -> Unit = {}, onE
             }
             PayoffEstimate(owed, terms, lastPayment = last?.let { -it.amount })
             if (owed > 0) {
-                OutlinedButton(onClick = onPlan) { Text("Payoff planner & schedule") }
+                TintedButton(onClick = onPlan) { Text("Payoff planner & schedule") }
             }
         }
     }

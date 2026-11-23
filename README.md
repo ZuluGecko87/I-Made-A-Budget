@@ -347,7 +347,8 @@ and in app storage on Android.
 
 ```
 composeApp/src/
-  commonMain/   shared code: model, budget math, OFX parser, import matcher, ledger/sync, all UI,
+  commonMain/   shared code: model, budget math, OFX parser, import matcher, ledger/sync, all UI
+                (styled after iOS on every platform: ui/IosStyle.kt),
                 receipt reader and expense report PDF/CSV (receipt/)
   androidMain/  Android activity, file pickers (Storage Access Framework), camera + ML Kit
   iosMain/      iPhone entry point, Files-app pickers, file access, PBKDF2 (CommonCrypto)

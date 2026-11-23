@@ -12,8 +12,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,7 +56,7 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers, nav: NavState? = null) 
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).widthIn(max = 720.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall)
+        Text("Settings", style = MaterialTheme.typography.displaySmall)
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -101,13 +99,13 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers, nav: NavState? = null) 
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    OutlinedButton(onClick = { pickers.openSyncApp(location) }) { Text("Open $cloudApp to upload now") }
+                    TintedButton(onClick = { pickers.openSyncApp(location) }) { Text("Open $cloudApp to upload now") }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { pick { pickers.createSyncFile() } }) { Text("Create sync file…") }
-                    OutlinedButton(onClick = { pick { pickers.openSyncFile() } }) { Text("Use existing sync file…") }
+                    TintedButton(onClick = { pick { pickers.openSyncFile() } }) { Text("Use existing sync file…") }
                     if (settings.syncId != null) {
-                        OutlinedButton(onClick = store::requestSync, enabled = sync !is SyncStatus.Syncing) { Text("Sync now") }
+                        TintedButton(onClick = store::requestSync, enabled = sync !is SyncStatus.Syncing) { Text("Sync now") }
                         TextButton(onClick = store::disconnectSync) { Text("Stop syncing") }
                     }
                 }
@@ -140,7 +138,7 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers, nav: NavState? = null) 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("This device", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
+                InputField(
                     deviceName, { deviceName = it },
                     label = { Text("Device name") },
                     singleLine = true,
