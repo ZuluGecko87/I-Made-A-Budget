@@ -35,7 +35,7 @@
 		B95FA3313635F1F2D5A83F2B /* IMAB.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IMAB.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C6596FA954F92F08A7D63574 /* ReceiptCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptCapture.swift; sourceTree = "<group>"; };
 		C86D23774C2B018E4A63250A /* iOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
-		"TEMP_FBF0E6DB-2C0F-4463-8FAE-5E1AAD29FC9E" /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+		"TEMP_EBFF501F-1D76-4E59-AEAF-F2F38050A959" /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -78,10 +78,10 @@
 			path = iosApp;
 			sourceTree = "<group>";
 		};
-		"TEMP_2E1517FD-39B4-4202-8AA7-45CDB5361A42" /* iosApp */ = {
+		"TEMP_1D496AF2-1715-4C8C-A3C5-30C202B1C24D" /* iosApp */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_FBF0E6DB-2C0F-4463-8FAE-5E1AAD29FC9E" /* Version.xcconfig */,
+				"TEMP_EBFF501F-1D76-4E59-AEAF-F2F38050A959" /* Version.xcconfig */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -226,7 +226,7 @@
 /* Begin XCBuildConfiguration section */
 		01190112F9C51449F7BC66B1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_FBF0E6DB-2C0F-4463-8FAE-5E1AAD29FC9E" /* Version.xcconfig */;
+			baseConfigurationReference = "TEMP_EBFF501F-1D76-4E59-AEAF-F2F38050A959" /* Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -245,7 +245,7 @@
 					"-framework",
 					ComposeApp,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.z.imab;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.zulugecko87.nutcracker;
 				PRODUCT_NAME = IMAB;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
@@ -255,7 +255,7 @@
 		};
 		04F5F44FCF796153804C747B /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_FBF0E6DB-2C0F-4463-8FAE-5E1AAD29FC9E" /* Version.xcconfig */;
+			baseConfigurationReference = "TEMP_EBFF501F-1D76-4E59-AEAF-F2F38050A959" /* Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -274,7 +274,7 @@
 					"-framework",
 					ComposeApp,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.z.imab;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.zulugecko87.nutcracker;
 				PRODUCT_NAME = IMAB;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
@@ -359,7 +359,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.z.imab.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.zulugecko87.nutcracker.tests;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -379,7 +379,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.z.imab.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.zulugecko87.nutcracker.tests;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

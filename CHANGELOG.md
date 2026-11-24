@@ -9,6 +9,11 @@ they were made; the builds themselves said 1.0.0.
 - **New name: Nutcracker.** IMAB is now *Nutcracker: Envelope Budget* (on the home screen, the Mac
   app and the splash screen). Your data, sync file and passphrase stay where they are; new sync files
   are named `Nutcracker-budget.json`.
+- **New app ID** `io.github.zulugecko87.nutcracker` (was `com.z.imab`) on Android, iPhone and Mac, set before
+  the first store upload. Phones treat it as a new app: install it, choose the sync file again, then
+  uninstall the old one.
+- **A quick tutorial on first launch:** six cards to tap or swipe through, covering accounts, assigning,
+  spending, goals, and sync and privacy. Skip it any time; Settings → Help → *Show the tutorial* brings it back.
 - **Scan receipt:** photograph a receipt (or choose a photo or image file) and IMAB reads the
   merchant, total, date and card on the device, then opens a new transaction with them filled in
   and the photo attached. The merchant is matched to your payees and their category; the card's
