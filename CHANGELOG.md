@@ -4,16 +4,24 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
-## 1.15.0 — 2026-11-24
+## 1.16.0 — 2026-11-24
 
 - **New name: Nutcracker.** IMAB is now *Nutcracker: Envelope Budget* (on the home screen, the Mac
-  app and the splash screen). Your data, sync file and passphrase stay where they are; new sync files
-  are named `Nutcracker-budget.json`.
+  app and the splash screen), with a new icon: a nutcracker bird holding a dollar bill. The splash
+  screen shows it with money raining around it. Your data, sync file and passphrase stay where they
+  are; new sync files are named `Nutcracker-budget.json`.
+- **A quick tutorial on first launch:** six cards to tap or swipe through, covering accounts, assigning,
+  spending, goals, and sync and privacy. Skip it any time; Settings → Help → *Show the tutorial* brings it back.
 - **New app ID** `io.github.zulugecko87.nutcracker` (was `com.z.imab`) on Android, iPhone and Mac, set before
   the first store upload. Phones treat it as a new app: install it, choose the sync file again, then
   uninstall the old one.
-- **A quick tutorial on first launch:** six cards to tap or swipe through, covering accounts, assigning,
-  spending, goals, and sync and privacy. Skip it any time; Settings → Help → *Show the tutorial* brings it back.
+- **Ready for the app stores:** Android targets API 36 and builds a Google Play bundle; the Android app
+  no longer includes the internet permission ML Kit adds (its usage statistics can't be sent); the
+  iPhone app has Apple's privacy manifest; the Mac download can be signed and notarized. A privacy
+  policy (PRIVACY.md) and a publishing checklist (docs/STORE-RELEASE.md).
+
+## 1.15.0 — 2026-11-23
+
 - **Scan receipt:** photograph a receipt (or choose a photo or image file) and IMAB reads the
   merchant, total, date and card on the device, then opens a new transaction with them filled in
   and the photo attached. The merchant is matched to your payees and their category; the card's
@@ -29,10 +37,6 @@ they were made; the builds themselves said 1.0.0.
   (+$…)*, which adds only the difference to what's already assigned, and for savings goals *Reach the
   target now*. On the Goals screen, each goal that's short this month has an *Assign $… to meet it*
   button that takes the difference from Ready to Assign.
-- **Ready for the app stores:** Android targets API 36 and builds a Google Play bundle; the Android app
-  no longer includes the internet permission ML Kit adds (its usage statistics can't be sent); the
-  iPhone app has Apple's privacy manifest; the Mac download can be signed and notarized. A privacy
-  policy (PRIVACY.md) and a publishing checklist (docs/STORE-RELEASE.md).
 - **Clearer sync errors on Android:** every way of writing the sync file is tried before giving up,
   and the message says whether the cloud app refuses changes or IMAB lost access.
 - **iPhone look everywhere:** Android, Mac and Windows now look like the iPhone app should: Apple's
