@@ -7,7 +7,7 @@ Multiplatform).
 
 ## Install
 
-Download the latest version from the [Releases page](https://github.com/ZuluGecko87/I-Made-A-Budget/releases/latest):
+Download the latest version from the [Releases page](https://github.com/ZuluGecko87/Nutcracker-Budget/releases/latest):
 
 | Device | File | Notes |
 |---|---|---|
