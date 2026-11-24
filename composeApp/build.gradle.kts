@@ -158,7 +158,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.z.imab"
+        applicationId = "io.github.zulugecko87.nutcracker"
         minSdk = 26
         targetSdk = 36
         versionCode = appVersionCode
@@ -214,7 +214,7 @@ compose.desktop {
                 upgradeUuid = "e00e6839-c06e-4e15-94c1-b6cf76da11c3"
             }
             macOS {
-                bundleID = "com.z.imab"
+                bundleID = "io.github.zulugecko87.nutcracker"
                 iconFile.set(project.file("icons/IMAB.icns"))
                 appCategory = "public.app-category.finance"
                 // Signed with a "Developer ID Application" certificate and notarized by Apple when these

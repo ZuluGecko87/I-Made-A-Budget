@@ -65,7 +65,7 @@ Play, uninstall it. The budget comes back when you choose your sync file again i
 
 Already in the code:
 
-- **Bundle ID** `com.z.imab`, for iPhone and iPad.
+- **Bundle ID** `io.github.zulugecko87.nutcracker`, for iPhone and iPad.
 - **Camera explanation**, shown when Nutcracker first asks for the camera.
 - **Encryption setting:** `ITSAppUsesNonExemptEncryption = NO`. Nutcracker's AES encryption only protects
   the user's own data, which is exempt, so there's no export paperwork.
@@ -84,7 +84,7 @@ Your steps:
 3. In App Store Connect, go to **Apps → + → New App**:
    - platform: iOS;
    - name: *Nutcracker: Envelope Budget*;
-   - bundle ID: com.z.imab, registered under Certificates, IDs & Profiles → Identifiers if it isn't
+   - bundle ID: io.github.zulugecko87.nutcracker, registered under Certificates, IDs & Profiles → Identifiers if it isn't
      offered;
    - SKU: `imab`.
 4. **App Privacy:**
