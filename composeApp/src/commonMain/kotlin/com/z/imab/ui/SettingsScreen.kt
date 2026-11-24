@@ -154,6 +154,14 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers, nav: NavState? = null) 
             }
         }
 
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Help", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("A quick tour of how Nutcracker works.", style = MaterialTheme.typography.bodySmall)
+                TintedButton(onClick = { store.setTutorialSeen(false) }) { Text("Show the tutorial") }
+            }
+        }
+
         StartOverCard(store, pickers)
 
         Text(

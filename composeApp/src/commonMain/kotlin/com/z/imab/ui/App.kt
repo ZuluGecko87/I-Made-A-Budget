@@ -159,8 +159,18 @@ class NavState {
 }
 
 @Composable
-/** [modifier] goes on the app's root; the Mac app uses it to accept dropped bank files. */
-fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean = true, modifier: Modifier = Modifier) {
+/**
+ * [modifier] goes on the app's root; the Mac app uses it to accept dropped bank files. [showTutorial]
+ * shows the tap-through tutorial after the splash until it has been seen once on this device.
+ */
+fun App(
+    store: BudgetStore,
+    pickers: Pickers,
+    nav: NavState,
+    showSplash: Boolean = true,
+    modifier: Modifier = Modifier,
+    showTutorial: Boolean = showSplash,
+) {
     val settings by store.settings.collectAsState()
     val dark = when (settings.theme) {
         "light" -> false
@@ -189,6 +199,13 @@ fun App(store: BudgetStore, pickers: Pickers, nav: NavState, showSplash: Boolean
                         ) {
                             MainLayout(store, pickers, nav)
                         }
+                    }
+                    val lockedOut = (lock as? LockState.NeedsPassphrase)?.local == true
+                    AnimatedVisibility(
+                        visible = showTutorial && !settings.tutorialSeen && !lockedOut,
+                        enter = fadeIn(), exit = fadeOut(tween(300)),
+                    ) {
+                        TutorialScreen(onDone = { store.setTutorialSeen(true) })
                     }
                     if (nav.dragging) DropOverlay(store, nav)
                     nav.dropError?.let { message ->

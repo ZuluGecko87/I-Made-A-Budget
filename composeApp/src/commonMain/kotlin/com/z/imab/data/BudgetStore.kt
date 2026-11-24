@@ -41,6 +41,8 @@ data class Settings(
     val encryptionReminder: Boolean = true,
     /** Name printed on exported expense reports, remembered between exports. */
     val expenseName: String = "",
+    /** The first-launch tutorial has been shown (or skipped) on this device. */
+    val tutorialSeen: Boolean = false,
 )
 
 sealed interface SyncStatus {
@@ -305,6 +307,12 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
     fun setExpenseName(name: String) {
         if (name == _settings.value.expenseName) return
         _settings.value = _settings.value.copy(expenseName = name)
+        scope.launch { saveSettings() }
+    }
+
+    fun setTutorialSeen(seen: Boolean) {
+        if (seen == _settings.value.tutorialSeen) return
+        _settings.value = _settings.value.copy(tutorialSeen = seen)
         scope.launch { saveSettings() }
     }
 
