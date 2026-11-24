@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /*
- * IMAB looks like an iPhone app on every device: Apple's system colors, the iOS type scale, grouped
+ * Nutcracker looks like an iPhone app on every device: Apple's system colors, the iOS type scale, grouped
  * inset lists on a grey background, plain blue text buttons and tinted (not outlined) buttons.
  */
 

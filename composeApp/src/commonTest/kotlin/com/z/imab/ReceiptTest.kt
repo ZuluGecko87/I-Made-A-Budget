@@ -200,7 +200,7 @@ class ReceiptTest {
         assertEquals("Date,Merchant,Category,Paid with,Memo,Amount,Receipt", csv[0])
         assertEquals("2026-11-02,\"Cafe, \"\"The\"\"\",Uncategorized,Chase Visa,Client lunch,12.50,no", csv[1])
         assertEquals("2026-11-03,'=REFUND,Uncategorized,Chase Visa,,-3.00,no", csv[2])
-        assertEquals("IMAB expenses 2026-11-02 to 2026-11-03.csv", ExpenseReport.fileName(items, "csv"))
+        assertEquals("Nutcracker expenses 2026-11-02 to 2026-11-03.csv", ExpenseReport.fileName(items, "csv"))
     }
 
     /** A 2×1 baseline JPEG's start: SOI, then a frame header saying 3 components. */

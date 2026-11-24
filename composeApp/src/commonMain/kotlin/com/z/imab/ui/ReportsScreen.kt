@@ -773,7 +773,7 @@ private fun NetWorthReportView(data: BudgetData, period: ReportPeriod) {
         RankedBars(r.debts.map { it.copy(amount = -it.amount) }, -end.debts, groupLabel = true)
     }
     Text(
-        "Every account counts, budget and tracking alike. Investments and property count at the balance recorded in IMAB, " +
+        "Every account counts, budget and tracking alike. Investments and property count at the balance recorded in Nutcracker, " +
             "so update them (a transaction or a reconcile) to keep this current.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

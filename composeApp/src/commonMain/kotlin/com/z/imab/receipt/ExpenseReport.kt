@@ -23,7 +23,7 @@ object ExpenseReport {
 
     fun total(items: List<Transaction>): Long = items.sumOf(::claimed)
 
-    /** "IMAB expenses 2026-11-02 to 2026-11-18". */
+    /** "Nutcracker expenses 2026-11-02 to 2026-11-18". */
     fun fileName(items: List<Transaction>, extension: String): String {
         val dates = items.map { it.date }.sorted()
         val range = when {
@@ -31,7 +31,7 @@ object ExpenseReport {
             dates.first() == dates.last() -> " ${dates.first()}"
             else -> " ${dates.first()} to ${dates.last()}"
         }
-        return "IMAB expenses$range.$extension"
+        return "Nutcracker expenses$range.$extension"
     }
 
     fun csv(data: BudgetData, items: List<Transaction>): String = buildString {
@@ -175,7 +175,7 @@ object ExpenseReport {
     }
 
     private fun footer(p: PdfPage, number: Int, count: Int) {
-        p.text(40f, 28f, "Prepared with IMAB", size = 7f, gray = 0.55f)
+        p.text(40f, 28f, "Prepared with Nutcracker", size = 7f, gray = 0.55f)
         p.textRight(PdfPage.WIDTH - 40f, 28f, "Page $number of $count", size = 7f)
     }
 }

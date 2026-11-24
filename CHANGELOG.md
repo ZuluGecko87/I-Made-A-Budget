@@ -4,8 +4,11 @@ The version is set in `gradle.properties` (`imab.versionName`, `imab.versionCode
 bottom of Settings. Versions before 1.4.0 were assigned afterwards, grouping the commits by when
 they were made; the builds themselves said 1.0.0.
 
-## 1.15.0 — 2026-11-23
+## 1.15.0 — 2026-11-24
 
+- **New name: Nutcracker.** IMAB is now *Nutcracker: Envelope Budget* (on the home screen, the Mac
+  app and the splash screen). Your data, sync file and passphrase stay where they are; new sync files
+  are named `Nutcracker-budget.json`.
 - **Scan receipt:** photograph a receipt (or choose a photo or image file) and IMAB reads the
   merchant, total, date and card on the device, then opens a new transaction with them filled in
   and the photo attached. The merchant is matched to your payees and their category; the card's

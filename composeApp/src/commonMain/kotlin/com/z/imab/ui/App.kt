@@ -304,7 +304,7 @@ private fun Sidebar(store: BudgetStore, nav: NavState) {
 private fun RailHeader(store: BudgetStore) {
     val sync by store.syncStatus.collectAsState()
     Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 20.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("IMAB", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
+        Text("Nutcracker", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
         when (sync) {
             is SyncStatus.Syncing -> Text("Syncing…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             is SyncStatus.Failed -> Icon(Icons.Default.Warning, "Sync failed", tint = MaterialTheme.colorScheme.error)

@@ -123,7 +123,7 @@ class AndroidStorage(private val context: Context) : Storage {
         Log.w("IMAB", "Couldn't write the sync file: ${failures.joinToString("; ")}; supportsWrite=$supportsWrite granted=$granted")
         error(
             when {
-                granted == false -> "IMAB no longer has permission to change the sync file. Choose it again with \"Use existing sync file\"."
+                granted == false -> "Nutcracker no longer has permission to change the sync file. Choose it again with \"Use existing sync file\"."
                 supportsWrite == false -> "The cloud app says this sync file can't be changed (it may be read-only, shared with you, or locked). " +
                     "Check it in the cloud app, or choose another file."
                 else -> "The cloud app wouldn't save the sync file (${failures.last()}). Open the cloud app to check it's signed in, " +
@@ -176,7 +176,7 @@ class AndroidPickers(private val activity: ComponentActivity) : Pickers {
         try {
             activity.contentResolver.takePersistableUriPermission(uri, RW)
         } catch (e: SecurityException) {
-            error("That location doesn't allow IMAB to keep access. Try a different folder or service.")
+            error("That location doesn't allow Nutcracker to keep access. Try a different folder or service.")
         }
         val provider = uri.authority.orEmpty().let {
             when {

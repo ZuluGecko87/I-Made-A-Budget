@@ -444,7 +444,7 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
         syncNow()
         val text = protect(budget.ledger.encode())
         val location = syncLocation
-        val name = archiveName(location?.let(::syncBaseName) ?: "IMAB-budget", now())
+        val name = archiveName(location?.let(::syncBaseName) ?: "Nutcracker-budget", now())
         storage.writeLocal(name, text)
         val savedTo = location?.let { if (storage.writeArchive(it, name, text)) folderOf(it) + name else null }
         alreadyArchived = budget.ledger.budgetId
@@ -575,6 +575,6 @@ class BudgetStore(private val storage: Storage, private val scope: CoroutineScop
         const val RECEIPT_PREFIX = "receipt-"
         /** How often to check whether a new version of the sync file has arrived. */
         const val WATCH_INTERVAL_MS = 5_000L
-        const val DEFAULT_SYNC_FILE_NAME = "IMAB-budget.json"
+        const val DEFAULT_SYNC_FILE_NAME = "Nutcracker-budget.json"
     }
 }

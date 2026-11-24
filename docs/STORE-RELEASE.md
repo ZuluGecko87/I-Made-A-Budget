@@ -30,8 +30,8 @@ Your steps:
 
 1. Create a developer account at play.google.com/console. It costs $25 once and asks for ID
    verification.
-2. **Create app:** name *IMAB – I Made A Budget*, App, Free.
-3. **App content.** Answers for IMAB:
+2. **Create app:** name *Nutcracker: Envelope Budget*, App, Free.
+3. **App content.** Answers for Nutcracker:
    - **Privacy policy:** the address above.
    - **Ads:** No.
    - **App access:** all features work without signing in.
@@ -40,7 +40,7 @@ Your steps:
    - **Target audience:** 18 and over.
    - **Data safety:** *No* to "collects or shares any of the required user data types". Data is
      stored on the device and in the user's own cloud storage, and nothing is sent to the developer.
-   - **Financial features:** choose *Personal finance → Budgeting / money management*. IMAB moves
+   - **Financial features:** choose *Personal finance → Budgeting / money management*. Nutcracker moves
      no money and offers no loans or trading.
    - **Government app:** No. **Health:** none.
 4. **Testing → Closed testing:** create a track, add at least 12 testers (by email or a Google
@@ -57,7 +57,7 @@ Your steps:
 
 Each upload needs a higher `imab.versionCode` in `gradle.properties`.
 
-**Your own phone:** the IMAB on it now is a debug build signed on this Mac. Before installing from
+**Your own phone:** the Nutcracker on it now is a debug build signed on this Mac. Before installing from
 Play, uninstall it. The budget comes back when you choose your sync file again in Settings → Sync →
 *Use existing sync file…*.
 
@@ -66,8 +66,8 @@ Play, uninstall it. The budget comes back when you choose your sync file again i
 Already in the code:
 
 - **Bundle ID** `com.z.imab`, for iPhone and iPad.
-- **Camera explanation**, shown when IMAB first asks for the camera.
-- **Encryption setting:** `ITSAppUsesNonExemptEncryption = NO`. IMAB's AES encryption only protects
+- **Camera explanation**, shown when Nutcracker first asks for the camera.
+- **Encryption setting:** `ITSAppUsesNonExemptEncryption = NO`. Nutcracker's AES encryption only protects
   the user's own data, which is exempt, so there's no export paperwork.
 - **Privacy manifest** (`iosApp/iosApp/PrivacyInfo.xcprivacy`): no tracking and no data collected.
   It also declares file modification dates (to notice sync file changes) and elapsed time
@@ -83,7 +83,7 @@ Your steps:
    `iosApp/Team.xcconfig`.
 3. In App Store Connect, go to **Apps → + → New App**:
    - platform: iOS;
-   - name: *IMAB – I Made A Budget*;
+   - name: *Nutcracker: Envelope Budget*;
    - bundle ID: com.z.imab, registered under Certificates, IDs & Profiles → Identifiers if it isn't
      offered;
    - SKU: `imab`.

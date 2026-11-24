@@ -107,8 +107,8 @@ jobs:
       - name: Rename
         run: |
           mkdir out play
-          cp composeApp/build/outputs/apk/release/composeApp-release.apk "out/IMAB-${{ needs.version.outputs.version }}-android.apk"
-          cp composeApp/build/outputs/bundle/release/composeApp-release.aab "play/IMAB-${{ needs.version.outputs.version }}-play.aab"
+          cp composeApp/build/outputs/apk/release/composeApp-release.apk "out/Nutcracker-${{ needs.version.outputs.version }}-android.apk"
+          cp composeApp/build/outputs/bundle/release/composeApp-release.aab "play/Nutcracker-${{ needs.version.outputs.version }}-play.aab"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android
@@ -167,7 +167,7 @@ jobs:
       - name: Rename
         run: |
           mkdir out
-          cp composeApp/build/compose/binaries/main/dmg/*.dmg "out/IMAB-${{ needs.version.outputs.version }}-mac-${{ matrix.name }}.dmg"
+          cp composeApp/build/compose/binaries/main/dmg/*.dmg "out/Nutcracker-${{ needs.version.outputs.version }}-mac-${{ matrix.name }}.dmg"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mac-${{ matrix.name }}
@@ -189,7 +189,7 @@ jobs:
         shell: bash
         run: |
           mkdir out
-          cp composeApp/build/compose/binaries/main/msi/*.msi "out/IMAB-${{ needs.version.outputs.version }}-windows.msi"
+          cp composeApp/build/compose/binaries/main/msi/*.msi "out/Nutcracker-${{ needs.version.outputs.version }}-windows.msi"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows
@@ -225,5 +225,5 @@ jobs:
           # Creates the tag on this commit when the release was started from the Actions tab.
           gh release create "${{ needs.version.outputs.tag }}" dist/* \
             --target "$GITHUB_SHA" \
-            --title "IMAB ${{ needs.version.outputs.version }}" \
+            --title "Nutcracker ${{ needs.version.outputs.version }}" \
             --notes-file notes.md

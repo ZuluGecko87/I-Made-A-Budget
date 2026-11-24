@@ -141,7 +141,7 @@ class Ledger {
         /** The whole file, including which budget it is. Throws if it isn't an IMAB ledger file. */
         fun decodeFile(text: String): LedgerFile {
             val file = ImabJson.decodeFromString(LedgerFile.serializer(), firstJsonObject(text))
-            require(file.format == LedgerFile.FORMAT) { "Not an IMAB budget file" }
+            require(file.format == LedgerFile.FORMAT) { "Not a Nutcracker budget file" }
             return file
         }
 

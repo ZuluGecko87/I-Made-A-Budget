@@ -220,11 +220,11 @@ class IosPickers(private val host: () -> UIViewController?) : Pickers {
 
     /** Saves an empty budget file where the user chooses, then keeps access to it there. */
     override suspend fun createSyncFile(): SyncLocation? {
-        val temp = NSURL.fileURLWithPath(NSTemporaryDirectory() + "IMAB-budget.json")
+        val temp = NSURL.fileURLWithPath(NSTemporaryDirectory() + "Nutcracker-budget.json")
         "".encodeToByteArray().toNSData().writeToURL(temp, atomically = true)
         val url = pick { UIDocumentPickerViewController(forExportingURLs = listOf(temp), asCopy = false) } ?: return null
         val id = bookmark(url) ?: return null
-        return SyncLocation(id, url.lastPathComponent ?: "IMAB-budget.json")
+        return SyncLocation(id, url.lastPathComponent ?: "Nutcracker-budget.json")
     }
 
     override val canTakePhoto: Boolean get() = Native.services.hasCamera()

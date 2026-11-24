@@ -1,4 +1,4 @@
-# IMAB — I Made A Budget
+# Nutcracker: Envelope Budget
 
 An envelope budgeting app that works offline, for macOS, Windows, Android and iPhone. There's no bank
 connection: import transactions from the statement files your bank lets you download (QBO, QFX or
@@ -11,10 +11,10 @@ Download the latest version from the [Releases page](https://github.com/ZuluGeck
 
 | Device | File | Notes |
 |---|---|---|
-| Android | `IMAB-<version>-android.apk` | Open it on the phone and allow installing from your browser or Files app. |
-| Mac (M1 or newer) | `IMAB-<version>-mac-apple-silicon.dmg` | Drag IMAB to Applications. The first time, macOS can't check the app: System Settings → Privacy & Security → **Open Anyway**. |
-| Mac (Intel) | `IMAB-<version>-mac-intel.dmg` | Same as above. |
-| Windows | `IMAB-<version>-windows.msi` | If SmartScreen warns about an unknown publisher: **More info → Run anyway**. |
+| Android | `Nutcracker-<version>-android.apk` | Open it on the phone and allow installing from your browser or Files app. |
+| Mac (M1 or newer) | `Nutcracker-<version>-mac-apple-silicon.dmg` | Drag Nutcracker to Applications. The first time, macOS can't check the app: System Settings → Privacy & Security → **Open Anyway**. |
+| Mac (Intel) | `Nutcracker-<version>-mac-intel.dmg` | Same as above. |
+| Windows | `Nutcracker-<version>-windows.msi` | If SmartScreen warns about an unknown publisher: **More info → Run anyway**. |
 | iPhone / iPad | not downloadable yet | iPhones only install apps Apple has signed, which needs an Apple Developer account. For now it's built from source with Xcode (see *Build → iPhone*). |
 
 Then set up sync (below) to share one budget between devices.
@@ -115,7 +115,7 @@ a spreadsheet or expense system. Afterwards, **Mark submitted** moves them off t
 ## Reconciling
 
 **Reconcile** on an account: enter the statement date and the balance the bank shows (for cards
-and loans, the amount owed). IMAB compares it with the **cleared** transactions up to that date and
+and loans, the amount owed). Nutcracker compares it with the **cleared** transactions up to that date and
 shows the difference; tick uncleared transactions that are on the statement and it updates as you
 go. When it matches, finishing locks those transactions (🔒) and records the date and balance; if it
 won't match, you can add a "Reconciliation adjustment" for the difference. A locked transaction
@@ -190,14 +190,14 @@ Credit card and line-of-credit accounts on the budget each get a payment categor
 
 ## How sync works
 
-The budget is one JSON file (default `IMAB-budget.json`) that you keep in any cloud folder.
+The budget is one JSON file (default `Nutcracker-budget.json`) that you keep in any cloud folder.
 Each change is stored as a versioned record, and devices merge records with "latest edit wins"
 per item. So:
 
-- the cloud service only needs to sync a file; IMAB never signs in to it or uses its API;
+- the cloud service only needs to sync a file; Nutcracker never signs in to it or uses its API;
 - if two devices overwrite each other's upload, the next sync from each one puts its changes back;
-- conflict copies the service creates next to the file (e.g. `IMAB-budget-MacBook.json`) are merged in on the Mac;
-- IMAB refuses to overwrite a file that isn't an IMAB budget.
+- conflict copies the service creates next to the file (e.g. `Nutcracker-budget-MacBook.json`) are merged in on the Mac;
+- Nutcracker refuses to overwrite a file that isn't a Nutcracker budget.
 
 Each device also keeps its own full copy, so the app works offline. It syncs:
 
@@ -221,11 +221,11 @@ and pick that same file.
   The service's app does the uploading, and Android can block a background app's network to save
   battery, so a change made on the phone may wait until that app runs. Settings → *Open OneDrive to
   upload now* (or setting the app's battery use to Unrestricted) gets it uploaded straight away.
-  Some of these apps don't cut a file to its new length when it's overwritten; IMAB trims it itself,
+  Some of these apps don't cut a file to its new length when it's overwritten; Nutcracker trims it itself,
   ignores leftovers when reading, and rewrites such a file clean.
 - **iPhone**: the Files picker shows iCloud Drive; for OneDrive, Google Drive or Dropbox tap
   *Browse → Locations* (the service's app must be installed, and turned on under Locations → ⋯ → Edit).
-  IMAB keeps access to the file you pick, so it's only picked once.
+  Nutcracker keeps access to the file you pick, so it's only picked once.
 
 ## Starting over
 
@@ -252,7 +252,7 @@ on Windows (`packageMsi`); the Mac one on a Mac.
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 
 ./gradlew :composeApp:run              # run the Mac app from source
-./gradlew :composeApp:packageDmg       # composeApp/build/compose/binaries/main/dmg/IMAB-<version>.dmg
+./gradlew :composeApp:packageDmg       # composeApp/build/compose/binaries/main/dmg/Nutcracker-<version>.dmg
 ./gradlew :composeApp:assembleDebug    # composeApp/build/outputs/apk/debug/composeApp-debug.apk
 ./gradlew :composeApp:installDebug     # install on a connected phone
 ./gradlew :composeApp:packageMsi       # on Windows: composeApp/build/compose/binaries/main/msi/
@@ -322,9 +322,9 @@ Publishing to Google Play and the App Store: [docs/STORE-RELEASE.md](docs/STORE-
   protection or the iPhone Keychain (this device only, never synced to iCloud). **A forgotten passphrase can't be recovered** — keep it
   in a password manager. A device without the key never overwrites an encrypted file. Until a passphrase is set, a reminder shows on every
   screen; *Dismiss* turns it off, and the switch under Settings → Encryption turns it back on.
-- **Account numbers**: bank files contain full account and card numbers. IMAB keeps only the bank's
+- **Account numbers**: bank files contain full account and card numbers. Nutcracker keeps only the bank's
   id and the last 4 digits (e.g. `bank-123456789-••1234`, `card-••1234`) to recognize the account.
-- IMAB uses no network itself: the budget is a file your cloud app syncs. Receipt text is read on
+- Nutcracker uses no network itself: the budget is a file your cloud app syncs. Receipt text is read on
   the device; ML Kit's request for internet access (to send Google usage statistics) is removed from
   the Android app. The privacy policy is [PRIVACY.md](PRIVACY.md). It asks for no Android permissions (photos are taken by the camera app and picked with
   the system photo picker), and on Android the budget is kept out of cloud backup. On iPhone it asks
@@ -338,9 +338,10 @@ Publishing to Google Play and the App Store: [docs/STORE-RELEASE.md](docs/STORE-
   The release workflow runs the same check and won't build installers if anything is found. Known
   fixes for the build tools' own libraries are pinned in the root `build.gradle.kts`.
 
-The splash screen artwork and the app icons are drawn in code (`ui/Splash.kt`). After changing it,
-regenerate the icon files with `./gradlew :composeApp:desktopTest -Picons`, then rebuild
-`composeApp/icons/IMAB.icns` from `IMAB-1024.png` (sips + iconutil).
+The app icons all come from one square picture, `composeApp/icons/Nutcracker-art.png` (1024×1024).
+After replacing it, regenerate the icon files with `./gradlew :composeApp:desktopTest -Picons`, then
+rebuild `composeApp/icons/IMAB.icns` from `IMAB-1024.png` (sips + iconutil). The splash screen
+artwork is drawn in code (`ui/Splash.kt`).
 
 To try the Mac app without touching your real budget, set `IMAB_DATA_DIR=/some/folder`.
 Real local data lives in `~/Library/Application Support/IMAB` on Mac, `%APPDATA%\IMAB` on Windows,
