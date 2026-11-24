@@ -8,7 +8,7 @@ The privacy policy is [PRIVACY.md](../PRIVACY.md).
 Both stores need a public address for the privacy policy. Pick one:
 
 - **Repository is public:** use
-  `https://github.com/ZuluGecko87/I-Made-A-Budget/blob/main/PRIVACY.md`.
+  `https://github.com/ZuluGecko87/Nutcracker-Budget/blob/main/PRIVACY.md`.
 - **Repository is private:** publish `PRIVACY.md` anywhere public, for example a public GitHub Gist
   or a GitHub Pages site, and use that address.
 

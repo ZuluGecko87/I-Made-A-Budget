@@ -90,4 +90,4 @@ be updated.
 ## Contact
 
 Questions about privacy: open an issue at
-<https://github.com/ZuluGecko87/I-Made-A-Budget/issues>.
+<https://github.com/ZuluGecko87/Nutcracker-Budget/issues>.
