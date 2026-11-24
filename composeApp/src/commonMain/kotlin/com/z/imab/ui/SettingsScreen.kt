@@ -62,7 +62,7 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers, nav: NavState? = null) 
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Sync", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "IMAB keeps your budget in a single file that you store in OneDrive, Google Drive or Dropbox. " +
+                    "Nutcracker keeps your budget in a single file that you store in OneDrive, Google Drive or Dropbox. " +
                         "Every device that opens the same file stays in sync. On the first device choose \"Create sync file\"; " +
                         "on the others choose \"Use existing sync file\" and pick that same file.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -157,7 +157,7 @@ fun SettingsScreen(store: BudgetStore, pickers: Pickers, nav: NavState? = null) 
         StartOverCard(store, pickers)
 
         Text(
-            "IMAB — I Made A Budget · v${com.z.imab.BuildInfo.VERSION_NAME}",
+            "Nutcracker: Envelope Budget · v${com.z.imab.BuildInfo.VERSION_NAME}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

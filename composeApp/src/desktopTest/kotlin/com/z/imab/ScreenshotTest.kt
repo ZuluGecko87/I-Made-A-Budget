@@ -20,12 +20,8 @@ import com.z.imab.ui.App
 import com.z.imab.ui.NavState
 import com.z.imab.ui.Screen
 import com.z.imab.ui.today
-import com.z.imab.ui.drawAppIcon
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -232,34 +228,80 @@ class ScreenshotTest {
     }
 
     /**
-     * Regenerates the app icons from the same artwork as the splash screen
-     * (run with -Picons): composeApp/icons/IMAB-1024.png for the Mac .icns, and the Android
-     * adaptive icon foreground.
+     * Regenerates every app icon from the square artwork composeApp/icons/Nutcracker-art.png
+     * (run with -Picons): IMAB-1024.png for the Mac .icns, IMAB.ico for Windows, the window and
+     * Dock icon, the iPhone icon and the Android adaptive icon foreground.
      */
     @Test
     fun renderIcons() {
         if (System.getProperty("imab.icons") == null) return
-        fun png(file: File, px: Int, content: @androidx.compose.runtime.Composable () -> Unit) {
-            val scene = ImageComposeScene(px, px, Density(1f), content = content)
+        val art = javax.imageio.ImageIO.read(File("icons/Nutcracker-art.png"))
+        fun write(img: java.awt.image.BufferedImage, file: File) {
             file.parentFile.mkdirs()
-            file.writeBytes(scene.render().encodeToData(EncodedImageFormat.PNG)!!.bytes)
-            scene.close()
+            javax.imageio.ImageIO.write(img, "png", file)
         }
-        // macOS icons leave a transparent margin around the rounded tile.
-        png(File("icons/IMAB-1024.png"), 1024) {
-            Canvas(Modifier.fillMaxSize().padding(100.dp)) { drawAppIcon() }
-        }
-        // iPhone icons are full-bleed squares with no transparency; iOS rounds the corners itself.
-        png(File("../iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"), 1024) {
-            Canvas(Modifier.fillMaxSize()) {
-                val c = com.z.imab.ui.ArtColors.Icon
-                drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.backgroundTop, c.backgroundBottom)))
-                drawAppIcon(background = false)
+        // macOS and Windows icons: a rounded tile with a transparent margin, like Apple's own icons.
+        val tile = Icons.canvas(1024, alpha = true).also { img ->
+            Icons.paint(img) {
+                clip = java.awt.geom.RoundRectangle2D.Float(100f, 100f, 824f, 824f, 370f, 370f)
+                drawImage(art, 100, 100, 824, 824, null)
             }
         }
-        // Android masks the adaptive foreground to the middle ~66%, so keep the art inside it.
-        png(File("src/androidMain/res/mipmap-xxxhdpi/ic_launcher_foreground.png"), 432) {
-            Canvas(Modifier.fillMaxSize().padding(88.dp)) { drawAppIcon(background = false) }
+        write(tile, File("icons/IMAB-1024.png"))
+        write(Icons.resize(tile, 256), File("src/desktopMain/resources/icon.png"))
+        Icons.writeIco(listOf(256, 64, 48, 32, 16).map { Icons.resize(tile, it) }, File("icons/IMAB.ico"))
+        // iPhone icons are full-bleed squares with no transparency; iOS rounds the corners itself.
+        write(Icons.resize(art, 1024, alpha = false), File("../iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"))
+        // Android shows the middle 72 of the adaptive icon's 108dp; size the art so ~85% of it shows.
+        val fg = Icons.canvas(432, alpha = true).also { img ->
+            val px = (432 * 72 / 108 / 0.85).toInt()
+            Icons.paint(img) { drawImage(Icons.resize(art, px), (432 - px) / 2, (432 - px) / 2, null) }
         }
+        write(fg, File("src/androidMain/res/mipmap-xxxhdpi/ic_launcher_foreground.png"))
+    }
+}
+
+/** Image helpers for [ScreenshotTest.renderIcons]. */
+private object Icons {
+    fun canvas(px: Int, alpha: Boolean) = java.awt.image.BufferedImage(
+        px, px, if (alpha) java.awt.image.BufferedImage.TYPE_INT_ARGB else java.awt.image.BufferedImage.TYPE_INT_RGB,
+    )
+
+    fun paint(img: java.awt.image.BufferedImage, block: java.awt.Graphics2D.() -> Unit) {
+        val g = img.createGraphics()
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+        g.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY)
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+        g.block()
+        g.dispose()
+    }
+
+    /** Scales down in halving steps, which keeps small icons sharp instead of grainy. */
+    fun resize(src: java.awt.image.BufferedImage, px: Int, alpha: Boolean = true): java.awt.image.BufferedImage {
+        var img = src
+        while (img.width / 2 >= px) {
+            val half = img.width / 2
+            img = canvas(half, alpha).also { c -> paint(c) { drawImage(img, 0, 0, half, half, null) } }
+        }
+        return canvas(px, alpha).also { c -> paint(c) { drawImage(img, 0, 0, px, px, null) } }
+    }
+
+    /** A Windows .ico holding each image as PNG (supported since Windows Vista). */
+    fun writeIco(images: List<java.awt.image.BufferedImage>, file: File) {
+        val pngs = images.map { img ->
+            java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(img, "png", it) }.toByteArray()
+        }
+        val buf = java.nio.ByteBuffer.allocate(6 + 16 * pngs.size + pngs.sumOf { it.size })
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buf.putShort(0).putShort(1).putShort(pngs.size.toShort())
+        var offset = 6 + 16 * pngs.size
+        images.zip(pngs).forEach { (img, png) ->
+            val side = if (img.width >= 256) 0 else img.width
+            buf.put(side.toByte()).put(side.toByte()).put(0).put(0)
+            buf.putShort(1).putShort(32).putInt(png.size).putInt(offset)
+            offset += png.size
+        }
+        pngs.forEach { buf.put(it) }
+        file.writeBytes(buf.array())
     }
 }

@@ -106,6 +106,7 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            implementation(compose.components.resources)
             implementation(libs.compose.icons.core)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
@@ -198,14 +199,14 @@ compose.desktop {
         mainClass = "com.z.imab.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi)
-            packageName = "IMAB"
+            packageName = "Nutcracker"
             packageVersion = appVersionName
-            description = "I Made A Budget"
+            description = "Nutcracker: Envelope Budget"
             vendor = "Z"
             modules("java.naming", "jdk.unsupported")
             windows {
                 iconFile.set(project.file("icons/IMAB.ico"))
-                menuGroup = "IMAB"
+                menuGroup = "Nutcracker"
                 shortcut = true
                 perUserInstall = true
                 dirChooser = true
@@ -234,6 +235,12 @@ compose.desktop {
             }
         }
     }
+}
+
+// Pictures in src/commonMain/composeResources (the splash screen's nutcracker).
+compose.resources {
+    packageOfResClass = "com.z.imab.resources"
+    publicResClass = false
 }
 
 tasks.withType<Test>().configureEach {

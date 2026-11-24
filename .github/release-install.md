@@ -6,8 +6,8 @@
 - **Android** — download the `.apk` on your phone and open it. Android asks you to allow installing
   apps from your browser or Files app; allow it for that app.
 - **Mac** — `apple-silicon` for M1 and newer Macs, `intel` for older ones. Open the `.dmg` and drag
-  IMAB to Applications. IMAB isn't signed by Apple, so the first time macOS says it can't check it:
-  open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to IMAB.
+  Nutcracker to Applications. Nutcracker isn't signed by Apple, so the first time macOS says it can't check it:
+  open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Nutcracker.
 - **Windows** — run the `.msi`. Windows SmartScreen may warn that it's from an unknown publisher:
   click **More info → Run anyway**.
 

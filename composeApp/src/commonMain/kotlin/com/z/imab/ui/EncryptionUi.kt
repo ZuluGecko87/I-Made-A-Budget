@@ -224,7 +224,7 @@ fun EncryptionCard(store: BudgetStore, openSetUp: Boolean = false, onSetUpShown:
                 Text(
                     "Your budget files (the sync file, this device's copy and archives) are encrypted with your passphrase " +
                         "(AES-256). " + if (remembered) "This device keeps the key in its secure storage." else
-                        "This device can't store the key securely, so the passphrase is asked each time IMAB opens.",
+                        "This device can't store the key securely, so the passphrase is asked each time Nutcracker opens.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 TintedButton(onClick = { setting = true }) { Text("Change passphrase…") }

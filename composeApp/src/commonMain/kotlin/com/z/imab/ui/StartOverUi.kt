@@ -92,7 +92,7 @@ fun StartOverCard(store: BudgetStore, pickers: Pickers) {
                 needsPassphrase = (name ?: "archive") to text
                 null
             } catch (e: Exception) {
-                message = "That isn't an IMAB budget file."
+                message = "That isn't a Nutcracker budget file."
                 null
             }
         }

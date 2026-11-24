@@ -103,7 +103,7 @@ fun ReconcileDialog(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        CompareLine("Cleared in IMAB", shown(cleared))
+                        CompareLine("Cleared in Nutcracker", shown(cleared))
                         CompareLine("Bank statement", bankBalance?.let(::shown) ?: "—")
                         HorizontalDivider()
                         when {
@@ -140,7 +140,7 @@ fun ReconcileDialog(
                     }
                 } else if (difference != null && difference != 0L) {
                     Text(
-                        "Everything up to ${date.short()} is cleared, so the difference is a transaction IMAB doesn't have (a fee or interest, say) or an amount that's different.",
+                        "Everything up to ${date.short()} is cleared, so the difference is a transaction Nutcracker doesn't have (a fee or interest, say) or an amount that's different.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }

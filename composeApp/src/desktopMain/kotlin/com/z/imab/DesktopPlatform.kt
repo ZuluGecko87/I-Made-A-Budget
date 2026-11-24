@@ -186,7 +186,7 @@ class DesktopPickers : Pickers {
     }
 
     override suspend fun pickArchive(): PickedFile? {
-        val dialog = FileDialog(null as Frame?, "Choose an IMAB archive to restore", FileDialog.LOAD)
+        val dialog = FileDialog(null as Frame?, "Choose a Nutcracker archive to restore", FileDialog.LOAD)
         dialog.directory = lastSyncFolder ?: defaultDir().path
         dialog.filterTo("json")
         dialog.isVisible = true
@@ -238,7 +238,7 @@ class DesktopPickers : Pickers {
     }
 
     override suspend fun createSyncFile(): SyncLocation? {
-        val dialog = FileDialog(null as Frame?, "Save the IMAB sync file in OneDrive, Google Drive or Dropbox", FileDialog.SAVE)
+        val dialog = FileDialog(null as Frame?, "Save the Nutcracker sync file in OneDrive, Google Drive or Dropbox", FileDialog.SAVE)
         dialog.directory = defaultDir().path
         dialog.file = BudgetStore.DEFAULT_SYNC_FILE_NAME
         dialog.isVisible = true
@@ -250,7 +250,7 @@ class DesktopPickers : Pickers {
     }
 
     override suspend fun openSyncFile(): SyncLocation? {
-        val dialog = FileDialog(null as Frame?, "Choose the existing IMAB sync file", FileDialog.LOAD)
+        val dialog = FileDialog(null as Frame?, "Choose the existing Nutcracker sync file", FileDialog.LOAD)
         dialog.directory = defaultDir().path
         dialog.filterTo("json")
         dialog.isVisible = true
